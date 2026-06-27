@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MIC_ITEMS = ["Deposit collected","Contract signed","Room key given","Move-in confirmed","First month paid","Rules explained"];
-const TABS = ["Dashboard","Tenants","Billing","KWH","Invoice","Rooms","Finance","History"];
+const TABS = ["Dashboard","Tenants","Billing","KWH","Invoice","Rooms","Finance","History","SOCOTECO"];
 const METHODS = ["gcash","maya","cash","sterling","gotyme","other"];
 
 function pad(n){ return String(n).padStart(2,"0"); }
@@ -80,6 +80,10 @@ export default function App(){
   const [finMonth, setFinMonth] = useState(curMonth());
   const [histRoom, setHistRoom] = useState("");
   const [histYear, setHistYear] = useState(String(today.getFullYear()));
+  const [socoteco, setSocoteco] = useState(LS.get("socoteco")||[]);
+  const [socoModal, setSocoModal] = useState(false);
+  const [editSocoIdx, setEditSocoIdx] = useState(-1);
+  const [socoForm, setSocoForm] = useState({month:"",kwhUsed:"",socoRate:"",socoBill:"",myRate:"",totalBoarderElec:"",tapal:"",notes:""});
   const [search, setSearch] = useState("");
   const [profileTenant, setProfileTenant] = useState(null);
   const [readmeOpen, setReadmeOpen] = useState(false);
@@ -108,6 +112,7 @@ export default function App(){
   const saveBills = v => sv("bills",v,setBills);
   const saveExpenses = v => sv("expenses",v,setExpenses);
   const saveKwh = v => sv("kwh",v,setKwhData);
+  const saveSocoteco = v => sv("socoteco",v,setSocoteco);
   const saveTransfers = v => sv("transfers",v,setTransfers);
   const saveMic = v => sv("mic",v,setMic);
 
@@ -1076,6 +1081,103 @@ export default function App(){
           </div>
         )}
 
+        {/* ── SOCOTECO ── */}
+        {tab===8&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:6}}>
+              <h2 style={{margin:0,fontSize:16,fontWeight:700}}>⚡ SOCOTECO Tracker</h2>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <button style={s.btn(T.green,"#071a0e")} onClick={()=>{setEditSocoIdx(-1);setSocoForm({month:"",kwhUsed:"",socoRate:"",socoBill:"",myRate:"",totalBoarderElec:"",tapal:"",notes:""});setSocoModal(true);}}>+ Add record</button>
+                <button style={s.btnSm(T.amber,"#1c0f00")} onClick={()=>{
+                  const rows=[["BOARDING HOUSE — SOCOTECO Records"],["Generated: "+todayStr()],[],["Month","KWH Used","SOCOTECO Rate","SOCOTECO Bill","My Rate","Total Boarder Elec","Tapal","Overall Bayad","Notes"],...[...socoteco].sort((a,z)=>a.month.localeCompare(z.month)).map(s=>[fmtMonth(s.month),s.kwhUsed,s.socoRate,s.socoBill,s.myRate,s.totalBoarderElec,s.tapal,(parseFloat(s.totalBoarderElec)||0)+(parseFloat(s.tapal)||0),s.notes||""])];
+                  exportCSV(rows,"SOCOTECO_Records.csv");
+                }}>Export CSV</button>
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            {socoteco.length>0&&(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
+                <div style={s.stat(T.blue)}>
+                  <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:T.text3}}>Total SOCOTECO paid</div>
+                  <div style={{fontSize:18,fontWeight:800,color:T.blue,marginTop:3}}>{peso(socoteco.reduce((a,x)=>a+(parseFloat(x.socoBill)||0),0))}</div>
+                </div>
+                <div style={s.stat(T.green)}>
+                  <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:T.text3}}>Total boarder electric collected</div>
+                  <div style={{fontSize:18,fontWeight:800,color:T.green,marginTop:3}}>{peso(socoteco.reduce((a,x)=>a+(parseFloat(x.totalBoarderElec)||0),0))}</div>
+                </div>
+                <div style={s.stat(T.amber)}>
+                  <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:T.text3}}>Total tapal</div>
+                  <div style={{fontSize:18,fontWeight:800,color:T.amber,marginTop:3}}>{peso(socoteco.reduce((a,x)=>a+(parseFloat(x.tapal)||0),0))}</div>
+                </div>
+                <div style={s.stat(T.green)}>
+                  <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:T.text3}}>Total overall bayad</div>
+                  <div style={{fontSize:18,fontWeight:800,color:T.green,marginTop:3}}>{peso(socoteco.reduce((a,x)=>a+(parseFloat(x.totalBoarderElec)||0)+(parseFloat(x.tapal)||0),0))}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Table */}
+            <div style={{border:`1px solid ${T.border}`,borderRadius:10,overflow:"hidden",overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:700}}>
+              <thead><tr>
+                {["Month","KWH Used","SOCOTECO Rate","SOCOTECO Bill","My Rate","Boarder Elec Total","Tapal","Overall Bayad","Notes",""].map(h=><th key={h} style={s.thStyle}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {socoteco.length===0&&<tr><td colSpan={10} style={{...s.tdStyle,padding:30,textAlign:"center",color:T.text3}}>No records yet. Click "+ Add record" to start.</td></tr>}
+                {[...socoteco].sort((a,z)=>z.month.localeCompare(a.month)).map((rec,i)=>{
+                  const overallBayad=(parseFloat(rec.totalBoarderElec)||0)+(parseFloat(rec.tapal)||0);
+                  const diff=overallBayad-(parseFloat(rec.socoBill)||0);
+                  return <tr key={i} style={{background:i%2===0?"transparent":T.bg3+"40"}}>
+                    <td style={{...s.tdStyle,fontWeight:700,color:T.green}}>{fmtMonth(rec.month)}</td>
+                    <td style={{...s.tdStyle,color:T.blue,fontWeight:600}}>{rec.kwhUsed} kwh</td>
+                    <td style={s.tdStyle}>{rec.socoRate}</td>
+                    <td style={{...s.tdStyle,color:T.red,fontWeight:600}}>{peso(rec.socoBill)}</td>
+                    <td style={{...s.tdStyle,color:T.amber,fontWeight:700}}>{rec.myRate}</td>
+                    <td style={{...s.tdStyle,color:T.green,fontWeight:700}}>{peso(rec.totalBoarderElec)}</td>
+                    <td style={{...s.tdStyle,color:T.amber}}>{peso(rec.tapal)}</td>
+                    <td style={{...s.tdStyle,fontWeight:800,color:"#f9ff00",background:T.bg3}}>{peso(overallBayad)}</td>
+                    <td style={{...s.tdStyle,fontSize:11,color:T.text3}}>{rec.notes||"—"}</td>
+                    <td style={s.tdStyle}>
+                      <div style={{display:"flex",gap:4}}>
+                        <button style={s.btnSm(T.bg3,T.text)} onClick={()=>{setEditSocoIdx(i);setSocoForm({...rec});setSocoModal(true);}}>Edit</button>
+                        <button style={s.btnSm(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveSocoteco(socoteco.filter((_,j)=>j!==i));}}>Del</button>
+                      </div>
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+            </div>
+
+            {/* Yearly breakdown */}
+            {socoteco.length>0&&<>
+              <div style={{...s.sectionLabel,marginTop:16}}>YEARLY OVERVIEW</div>
+              <div style={{border:`1px solid ${T.border}`,borderRadius:10,overflow:"hidden",overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:600}}>
+                <thead><tr>
+                  {["Month","KWH","SOCOTECO Bill","My Rate","Boarder Elec","Tapal","Overall Bayad"].map(h=><th key={h} style={s.thStyle}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {[...socoteco].sort((a,z)=>a.month.localeCompare(z.month)).map((rec,i)=>{
+                    const ob=(parseFloat(rec.totalBoarderElec)||0)+(parseFloat(rec.tapal)||0);
+                    return <tr key={i}>
+                      <td style={{...s.tdStyle,fontWeight:600}}>{fmtMonth(rec.month)}</td>
+                      <td style={{...s.tdStyle,color:T.blue}}>{rec.kwhUsed}</td>
+                      <td style={{...s.tdStyle,color:T.red}}>{peso(rec.socoBill)}</td>
+                      <td style={{...s.tdStyle,color:T.amber,fontWeight:700}}>{rec.myRate}</td>
+                      <td style={{...s.tdStyle,color:T.green,fontWeight:600}}>{peso(rec.totalBoarderElec)}</td>
+                      <td style={{...s.tdStyle,color:T.amber}}>{peso(rec.tapal)}</td>
+                      <td style={{...s.tdStyle,fontWeight:800,color:"#f9ff00",background:T.bg3}}>{peso(ob)}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+              </div>
+            </>}
+          </div>
+        )}
+
         {/* ── HISTORY ── */}
         {tab===7&&(
           <div>
@@ -1130,6 +1232,40 @@ export default function App(){
         )}
 
       </div>
+
+      {/* SOCOTECO Modal */}
+      <Modal open={socoModal} onClose={()=>setSocoModal(false)} title={editSocoIdx>=0?"Edit SOCOTECO Record":"Add SOCOTECO Record"}>
+        <div style={{background:T.abg,border:`1px solid ${T.abr}`,borderRadius:8,padding:"8px 10px",fontSize:12,color:T.amber,marginBottom:10}}>
+          Fill in from your SOCOTECO receipt each month.
+        </div>
+        <div style={s.g2}>
+          <div><label style={s.label}>Month</label><input type="month" value={socoForm.month} onChange={e=>setSocoForm({...socoForm,month:e.target.value})} style={s.input}/></div>
+          <Inp label="KWH Used (from receipt)" type="number" value={socoForm.kwhUsed} onChange={v=>setSocoForm({...socoForm,kwhUsed:v})} placeholder="e.g. 965"/>
+          <Inp label="SOCOTECO Rate" type="number" value={socoForm.socoRate} onChange={v=>setSocoForm({...socoForm,socoRate:v})} placeholder="e.g. 8.6"/>
+          <Inp label="SOCOTECO Bill (₱)" type="number" value={socoForm.socoBill} onChange={v=>setSocoForm({...socoForm,socoBill:v})} placeholder="e.g. 8976"/>
+        </div>
+        <div style={{height:1,background:T.border,margin:"12px 0"}}/>
+        <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:6}}>Your boarders calculation</div>
+        <div style={s.g2}>
+          <Inp label="My Rate (₱/kwh)" type="number" value={socoForm.myRate} onChange={v=>setSocoForm({...socoForm,myRate:v})} placeholder="e.g. 13"/>
+          <Inp label="Total Boarder Electric (₱)" type="number" value={socoForm.totalBoarderElec} onChange={v=>setSocoForm({...socoForm,totalBoarderElec:v})} placeholder="e.g. 3679.78"/>
+          <Inp label="Tapal (₱)" type="number" value={socoForm.tapal} onChange={v=>setSocoForm({...socoForm,tapal:v})} placeholder="e.g. 516"/>
+          <div>
+            <label style={s.label}>Overall Bayad (₱)</label>
+            <input value={peso((parseFloat(socoForm.totalBoarderElec)||0)+(parseFloat(socoForm.tapal)||0))} readOnly style={{...s.input,fontWeight:800,color:"#f9ff00",background:T.bg4}}/>
+          </div>
+        </div>
+        <Inp label="Notes (optional)" value={socoForm.notes} onChange={v=>setSocoForm({...socoForm,notes:v})} placeholder="e.g. rate increased this month"/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+          <button style={s.btn(T.bg3,T.text)} onClick={()=>setSocoModal(false)}>Cancel</button>
+          <button style={s.btn(T.green,"#071a0e")} onClick={()=>{
+            if(!socoForm.month){alert("Select a month");return;}
+            const newS=editSocoIdx>=0?socoteco.map((x,i)=>i===editSocoIdx?socoForm:x):[...socoteco,socoForm];
+            saveSocoteco(newS);setSocoModal(false);
+          }}>Save record</button>
+        </div>
+      </Modal>
+
     </div>
   );
 }
