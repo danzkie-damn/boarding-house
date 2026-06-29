@@ -134,11 +134,18 @@ function BillModal({open,initForm,initBals,T,tenants,kwhData,bills,curMon,onClos
         </div>
       ))}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <div><label style={LB}>Total</label><input value={peso(total)} readOnly style={{...IS,fontWeight:800,color:T.green,background:T.bg4}}/></div>
-        <div><label style={LB}>Amount paid</label><input type="number" value={f.amtPaid} onChange={u("amtPaid")} placeholder="0" style={IS}/></div>
-        <div><label style={LB}>Status</label><select value={f.status} onChange={u("status")} style={IS}><option value="paid">Paid</option><option value="balance">Balance</option><option value="unpaid">Unpaid</option></select></div>
+        <div><label style={LB}>Total due</label><input value={peso(total)} readOnly style={{...IS,fontWeight:800,color:T.green,background:T.bg4}}/></div>
+        <div><label style={LB}>Amount paid</label><input type="number" value={f.amtPaid} onChange={e=>{const v=parseFloat(e.target.value)||0;const auto=v>=total?"paid":v>0?"balance":"unpaid";sf(p=>({...p,amtPaid:e.target.value,status:auto}));}} placeholder="0" style={IS}/></div>
+        <div><label style={LB}>Date paid</label><input type="date" value={f.datePaid||""} onChange={u("datePaid")} style={IS}/></div>
+        <div><label style={LB}>Remaining balance</label><input value={parseFloat(f.amtPaid||0)>0?peso(Math.max(0,total-(parseFloat(f.amtPaid)||0))):"—"} readOnly style={{...IS,fontWeight:700,color:parseFloat(f.amtPaid||0)>0&&(total-(parseFloat(f.amtPaid)||0))>0?T.amber:T.green,background:T.bg4}}/></div>
+        <div><label style={LB}>Status</label><select value={f.status} onChange={u("status")} style={IS}><option value="paid">Paid (full)</option><option value="balance">Balance (partial)</option><option value="unpaid">Unpaid</option></select></div>
         <div><label style={LB}>Method</label><select value={f.method} onChange={u("method")} style={IS}>{METHODS.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
       </div>
+      {f.status==="balance"&&parseFloat(f.amtPaid||0)>0&&(
+        <div style={{background:T.abg,border:"1px solid "+T.abr,borderRadius:8,padding:"8px 10px",fontSize:12,color:T.amber,marginTop:4}}>
+          Partial payment: paid {peso(f.amtPaid)} on {f.datePaid||"—"} · Still owes {peso(Math.max(0,total-(parseFloat(f.amtPaid)||0)))}
+        </div>
+      )}
       <div><label style={LB}>Notes</label><input value={f.notes} onChange={u("notes")} placeholder="For your reference only" style={IS}/></div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
         <button onClick={onClose} style={{padding:"8px 14px",border:"1px solid "+T.border2,borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,background:T.bg3,color:T.text}}>Cancel</button>
@@ -440,7 +447,15 @@ export default function App(){
     setK({...kwh,["r"+room]:u});
   }
 
-  function togTr(tkey,field){const cur=transfers[tkey]||{};setTr({...transfers,[tkey]:{...cur,[field]:!cur[field]}});}
+  function togTr(tkey,field){
+    const cur=transfers[tkey]||{};
+    const nowOn=!cur[field];
+    const dateKey=field+"Date";
+    const update={...cur,[field]:nowOn};
+    if(nowOn){update[dateKey]=today();}
+    else{delete update[dateKey];}
+    setTr({...transfers,[tkey]:update});
+  }
 
   function qBal(room,month){
     const desc=prompt("Balance description:","Balance");if(!desc)return;
@@ -606,11 +621,16 @@ export default function App(){
                   <span style={{fontSize:13,fontWeight:700}}>Room {b.room} - {b.name}</span>
                   <span style={BDG(all?T.green:T.bg4,all?"#071a0e":T.text2)}>{all?"Done":"Pending"}</span>
                 </div>
-                <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {["room","elec","water","wifi"].map(field=>(
-                    <label key={field} style={{display:"flex",gap:4,alignItems:"center",fontSize:12,cursor:"pointer",color:tr[field]?T.green:T.text2}}>
-                      <input type="checkbox" checked={!!tr[field]} onChange={()=>togTr(tkey,field)} style={{accentColor:T.green,width:14,height:14,cursor:"pointer"}}/>{field}
-                    </label>
+                    <div key={field} style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2}}>
+                      <label style={{display:"flex",gap:4,alignItems:"center",fontSize:12,cursor:"pointer",color:tr[field]?T.green:T.text2}}>
+                        <input type="checkbox" checked={!!tr[field]} onChange={()=>togTr(tkey,field)} style={{accentColor:T.green,width:14,height:14,cursor:"pointer"}}/>{field}
+                      </label>
+                      {tr[field]&&(
+                        <input type="date" value={tr[field+"Date"]||today()} onChange={e=>{const cur=transfers[tkey]||{};setTr({...transfers,[tkey]:{...cur,[field+"Date"]:e.target.value}});}} style={{fontSize:10,padding:"2px 4px",border:"1px solid "+T.border2,borderRadius:4,background:T.input,color:T.green,width:100,cursor:"pointer"}}/>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -758,9 +778,12 @@ export default function App(){
                       </td>
                       <td style={TD}>
                         {["room","elec","water","wifi"].map(field=>(
-                          <label key={field} style={{display:"flex",gap:4,alignItems:"center",fontSize:11,cursor:"pointer",color:tr[field]?T.green:T.text2,marginBottom:2}}>
-                            <input type="checkbox" checked={!!tr[field]} onChange={()=>togTr(tkey,field)} style={{accentColor:T.green,cursor:"pointer"}}/>{field}
-                          </label>
+                          <div key={field} style={{marginBottom:4}}>
+                            <label style={{display:"flex",gap:4,alignItems:"center",fontSize:11,cursor:"pointer",color:tr[field]?T.green:T.text2}}>
+                              <input type="checkbox" checked={!!tr[field]} onChange={()=>togTr(tkey,field)} style={{accentColor:T.green,cursor:"pointer"}}/>{field}
+                            </label>
+                            {tr[field]&&<input type="date" value={tr[field+"Date"]||today()} onChange={e=>{const cur=transfers[tkey]||{};setTr({...transfers,[tkey]:{...cur,[field+"Date"]:e.target.value}});}} style={{fontSize:10,padding:"2px 4px",border:"1px solid "+T.border2,borderRadius:4,background:T.input,color:T.green,width:95,marginTop:2}}/>}
+                          </div>
                         ))}
                       </td>
                     </tr>
