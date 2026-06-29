@@ -91,17 +91,32 @@ function TenantModal({open,editData,T,onClose,onSave}){
   );
 }
 
-function BillModal({open,initForm,initBals,T,tenants,kwhData,bills,curMon,onClose,onSave}){
-  const blank={room:"",datePaid:today(),rent:"",elec:"",water:"",wifi:"",amtPaid:"",status:"unpaid",method:"gcash",notes:""};
+function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,curMon,onClose,onSave}){
+  const blank={room:"",rent:"",elec:"",water:"",wifi:"",status:"unpaid",notes:""};
   const[f,sf]=useState(blank);
   const[bals,setBals]=useState([]);
-  useEffect(()=>{if(!open)return;sf({...blank,...(initForm||{})});setBals(initBals||[]);},[open]);
+  const[payments,setPayments]=useState([]); // [{amt, date, method, note}]
+  const[newPay,setNewPay]=useState({amt:"",date:"",method:"gcash",note:""});
+
+  useEffect(()=>{
+    if(!open)return;
+    sf({...blank,...(initForm||{})});
+    setBals(initBals||[]);
+    setPayments(initPayments||[]);
+    setNewPay({amt:"",date:"",method:"gcash",note:""});
+  },[open]);
+
   if(!open)return null;
   const IS={width:"100%",padding:"8px 10px",border:"1px solid "+T.border2,borderRadius:8,fontSize:13,color:T.text,background:T.input,fontFamily:"inherit",boxSizing:"border-box",outline:"none"};
   const LB={fontSize:12,fontWeight:600,color:T.text2,display:"block",marginBottom:3,marginTop:8};
   const u=k=>e=>sf(p=>({...p,[k]:e.target.value}));
+  const up=k=>e=>setNewPay(p=>({...p,[k]:e.target.value}));
   const bt=bals.reduce((a,b)=>a+(parseFloat(b.amt)||0),0);
   const total=(parseFloat(f.rent)||0)+(parseFloat(f.elec)||0)+(parseFloat(f.water)||0)+(parseFloat(f.wifi)||0)+bt;
+  const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
+  const remaining=Math.max(0,total-totalPaid);
+  const autoStatus=totalPaid>=total&&total>0?"paid":totalPaid>0?"balance":"unpaid";
+
   const pickRoom=e=>{
     const room=parseInt(e.target.value);
     const t=tenants.find(x=>x.room===room);
@@ -111,19 +126,25 @@ function BillModal({open,initForm,initBals,T,tenants,kwhData,bills,curMon,onClos
     setBals(pb);
     sf(p=>({...p,room:e.target.value,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):""}));
   };
+
+  function addPayment(){
+    if(!newPay.amt||!newPay.date){alert("Enter amount and date");return;}
+    setPayments(p=>[...p,{...newPay,amt:parseFloat(newPay.amt)}]);
+    setNewPay({amt:"",date:"",method:"gcash",note:""});
+  }
+
   return(
     <OL T={T} onClose={onClose}>
       <MHdr title="Add / Update Bill" T={T} onClose={onClose}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <div><label style={LB}>Room</label><select value={f.room||""} onChange={pickRoom} style={IS}><option value="">Select...</option>{tenants.map(t=><option key={t.room} value={t.room}>Room {t.room} - {t.name}</option>)}</select></div>
-        <div><label style={LB}>Date paid</label><input type="date" value={f.datePaid} onChange={u("datePaid")} style={IS}/></div>
         <div><label style={LB}>Room rent</label><input type="number" value={f.rent} onChange={u("rent")} style={IS}/></div>
         <div><label style={LB}>Electric</label><input type="number" value={f.elec} onChange={u("elec")} style={IS}/></div>
         <div><label style={LB}>Water</label><input type="number" value={f.water} onChange={u("water")} style={IS}/></div>
         <div><label style={LB}>Wifi</label><input type="number" value={f.wifi} onChange={u("wifi")} style={IS}/></div>
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,marginBottom:6}}>
-        <span style={{fontSize:13,fontWeight:700,color:T.text}}>Balances</span>
+        <span style={{fontSize:13,fontWeight:700,color:T.text}}>Extra Balances</span>
         <button onClick={()=>setBals(b=>[...b,{desc:"",amt:""}])} style={{padding:"4px 10px",border:"1px solid "+T.border2,borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,background:T.bg3,color:T.text}}>+ Add</button>
       </div>
       {bals.map((bl,i)=>(
@@ -133,23 +154,52 @@ function BillModal({open,initForm,initBals,T,tenants,kwhData,bills,curMon,onClos
           <button onClick={()=>setBals(b=>b.filter((_,j)=>j!==i))} style={{background:T.rbg,color:T.red,border:"1px solid "+T.rbr,borderRadius:6,padding:"6px 10px",cursor:"pointer",fontWeight:700}}>x</button>
         </div>
       ))}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <div><label style={LB}>Total due</label><input value={peso(total)} readOnly style={{...IS,fontWeight:800,color:T.green,background:T.bg4}}/></div>
-        <div><label style={LB}>Amount paid</label><input type="number" value={f.amtPaid} onChange={e=>{const v=parseFloat(e.target.value)||0;const auto=v>=total?"paid":v>0?"balance":"unpaid";sf(p=>({...p,amtPaid:e.target.value,status:auto}));}} placeholder="0" style={IS}/></div>
-        <div><label style={LB}>Date paid</label><input type="date" value={f.datePaid||""} onChange={u("datePaid")} style={IS}/></div>
-        <div><label style={LB}>Remaining balance</label><input value={parseFloat(f.amtPaid||0)>0?peso(Math.max(0,total-(parseFloat(f.amtPaid)||0))):"—"} readOnly style={{...IS,fontWeight:700,color:parseFloat(f.amtPaid||0)>0&&(total-(parseFloat(f.amtPaid)||0))>0?T.amber:T.green,background:T.bg4}}/></div>
-        <div><label style={LB}>Status</label><select value={f.status} onChange={u("status")} style={IS}><option value="paid">Paid (full)</option><option value="balance">Balance (partial)</option><option value="unpaid">Unpaid</option></select></div>
-        <div><label style={LB}>Method</label><select value={f.method} onChange={u("method")} style={IS}>{METHODS.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
+
+      <div style={{height:1,background:T.border,margin:"12px 0"}}/>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontSize:13,fontWeight:700,color:T.text}}>Payment Log</span>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:12,color:T.text3}}>Total due: <strong style={{color:T.green}}>{peso(total)}</strong></div>
+          <div style={{fontSize:12,color:T.text3}}>Total paid: <strong style={{color:T.blue}}>{peso(totalPaid)}</strong></div>
+          {remaining>0&&<div style={{fontSize:12,fontWeight:700,color:T.amber}}>Remaining: {peso(remaining)}</div>}
+          {remaining===0&&totalPaid>0&&<div style={{fontSize:12,fontWeight:700,color:T.green}}>Fully paid!</div>}
+        </div>
       </div>
-      {f.status==="balance"&&parseFloat(f.amtPaid||0)>0&&(
-        <div style={{background:T.abg,border:"1px solid "+T.abr,borderRadius:8,padding:"8px 10px",fontSize:12,color:T.amber,marginTop:4}}>
-          Partial payment: paid {peso(f.amtPaid)} on {f.datePaid||"—"} · Still owes {peso(Math.max(0,total-(parseFloat(f.amtPaid)||0)))}
+
+      {payments.length>0&&(
+        <div style={{background:T.bg3,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
+          {payments.map((p,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:i<payments.length-1?"1px solid "+T.border:"none"}}>
+              <div>
+                <span style={{fontSize:12,fontWeight:700,color:T.blue}}>Payment {i+1}</span>
+                <span style={{fontSize:11,color:T.text3,marginLeft:6}}>{p.date} · {p.method}</span>
+                {p.note&&<span style={{fontSize:11,color:T.text3,marginLeft:6}}>· {p.note}</span>}
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontWeight:700,color:T.green}}>{peso(p.amt)}</span>
+                <button onClick={()=>setPayments(ps=>ps.filter((_,j)=>j!==i))} style={{background:T.rbg,color:T.red,border:"1px solid "+T.rbr,borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:11,fontWeight:700}}>x</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
+
+      <div style={{background:T.bbg,border:"1px solid "+T.bbr,borderRadius:8,padding:"10px",marginBottom:8}}>
+        <div style={{fontSize:11,fontWeight:700,color:T.blue,marginBottom:6}}>+ ADD PAYMENT</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <div><label style={{...LB,marginTop:0}}>Amount (P)</label><input type="number" value={newPay.amt} onChange={up("amt")} placeholder="0" style={IS}/></div>
+          <div><label style={{...LB,marginTop:0}}>Date paid</label><input type="date" value={newPay.date} onChange={up("date")} style={IS}/></div>
+          <div><label style={{...LB,marginTop:0}}>Method</label><select value={newPay.method} onChange={up("method")} style={IS}>{METHODS.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
+          <div><label style={{...LB,marginTop:0}}>Note (optional)</label><input value={newPay.note} onChange={up("note")} placeholder="e.g. GCash ref..." style={IS}/></div>
+        </div>
+        <button onClick={addPayment} style={{marginTop:8,padding:"6px 14px",border:"none",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,background:T.blue,color:"#fff"}}>Add this payment</button>
+      </div>
+
       <div><label style={LB}>Notes</label><input value={f.notes} onChange={u("notes")} placeholder="For your reference only" style={IS}/></div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
         <button onClick={onClose} style={{padding:"8px 14px",border:"1px solid "+T.border2,borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,background:T.bg3,color:T.text}}>Cancel</button>
-        <button onClick={()=>onSave(f,bals,total)} style={{padding:"8px 14px",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,background:T.green,color:"#071a0e"}}>Save bill</button>
+        <button onClick={()=>onSave(f,bals,payments,total,autoStatus)} style={{padding:"8px 14px",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,background:T.green,color:"#071a0e"}}>Save bill</button>
       </div>
     </OL>
   );
@@ -291,6 +341,7 @@ export default function App(){
   const[billOpen,setBillOpen]=useState(false);
   const[billForm,setBillForm]=useState(null);
   const[billBals,setBillBals]=useState([]);
+  const[billPayments,setBillPayments]=useState([]);
   const[expOpen,setExpOpen]=useState(false);
   const[socoOpen,setSocoOpen]=useState(false);
   const[socoEdit,setSocoEdit]=useState(null);
@@ -366,27 +417,39 @@ export default function App(){
   function openBillModal(room,month){
     const b=month?bills.find(x=>x.room==room&&x.month===month):null;
     if(b){
-      setBillForm({room:b.room,datePaid:b.datePaid||today(),rent:b.rent||"",elec:b.elec||"",water:b.water||"",wifi:b.wifi||"",amtPaid:b.amtPaid||"",status:b.status||"unpaid",method:b.method||"gcash",notes:b.notes||""});
+      setBillForm({room:b.room,rent:b.rent||"",elec:b.elec||"",water:b.water||"",wifi:b.wifi||"",status:b.status||"unpaid",notes:b.notes||""});
       setBillBals(b.balances||[]);
+      setBillPayments(b.payments||[]);
     }else if(room){
       const t=tenants.find(x=>x.room===room);
       const k=kwh["r"+room]||{};
       const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
-      setBillForm({room,datePaid:today(),rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):"",amtPaid:"",status:"unpaid",method:"gcash",notes:""});
+      setBillForm({room,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):"",status:"unpaid",notes:""});
       setBillBals(pb);
+      setBillPayments([]);
     }else{
-      setBillForm(null);setBillBals([]);
+      setBillForm(null);setBillBals([]);setBillPayments([]);
     }
     setBillOpen(true);
   }
 
-  function saveBill(f,bals,total){
+  function saveBill(f,bals,payments,total,autoStatus){
     const room=parseInt(f.room);
     if(!room){alert("Select a room");return;}
     const t=tenants.find(x=>x.room===room);
     const bt=bals.reduce((a,b)=>a+(parseFloat(b.amt)||0),0);
-    const b={room,name:t?t.name:"",month:curMon,datePaid:f.datePaid,dueDate:due,rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,balances:bals,balTotal:bt,total,amtPaid:parseFloat(f.amtPaid)||0,status:f.status,method:f.method,notes:f.notes};
+    const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
+    const lastPay=payments.length>0?payments[payments.length-1]:null;
+    const b={
+      room,name:t?t.name:"",month:curMon,dueDate:due,
+      rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,
+      balances:bals,balTotal:bt,total,
+      payments,amtPaid:totalPaid,
+      datePaid:lastPay?lastPay.date:"",
+      method:lastPay?lastPay.method:"",
+      status:autoStatus,notes:f.notes
+    };
     const ei=bills.findIndex(x=>x.room===room&&x.month===curMon);
     setB(ei>=0?bills.map((x,i)=>i===ei?b:x):[...bills,b]);
     setBillOpen(false);
@@ -551,7 +614,7 @@ export default function App(){
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",fontSize:14}}>
 
       <TenantModal open={tenantOpen} editData={tenantEdit} T={T} onClose={()=>setTenantOpen(false)} onSave={saveTenant}/>
-      <BillModal open={billOpen} initForm={billForm} initBals={billBals} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={curMon} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
+      <BillModal open={billOpen} initForm={billForm} initBals={billBals} initPayments={billPayments} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={curMon} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
       <ExpModal open={expOpen} T={T} onClose={()=>setExpOpen(false)} onSave={(e)=>{setE([...expenses,e]);setExpOpen(false);}}/>
       <SocoModal open={socoOpen} editRec={socoEdit} T={T} onClose={()=>setSocoOpen(false)} onSave={(f)=>{const ns=socoEditIdx>=0?soco.map((x,i)=>i===socoEditIdx?f:x):[...soco,f];setSc(ns);setSocoOpen(false);}}/>
       <PrevBillModal open={prevOpen} T={T} tenants={tenants} onClose={()=>setPrevOpen(false)} onSave={savePrevBill}/>
@@ -600,17 +663,54 @@ export default function App(){
             <div style={SL}>PAID THIS MONTH</div>
             {paidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>None paid yet.</div>}
             {paidBills.map(b=>(
-              <div key={b.room} style={{background:T.gbg,border:"1px solid "+T.gbr,borderRadius:10,padding:11,marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div><div style={{fontSize:12,color:T.text3,marginTop:2}}>{b.datePaid||"—"} <span style={BDG(T.bbg,T.blue)}>{b.method||"—"}</span></div></div>
-                <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:T.green}}>{peso(b.total)}</div><span style={BDG(T.green,"#071a0e")}>PAID</span></div>
+              <div key={b.room} style={{background:T.gbg,border:"1px solid "+T.gbr,borderRadius:10,padding:11,marginBottom:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div></div>
+                  <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:T.green}}>{peso(b.total)}</div><span style={BDG(T.green,"#071a0e")}>PAID</span></div>
+                </div>
+                {b.payments&&b.payments.length>0?(
+                  <div style={{marginTop:6}}>
+                    {b.payments.map((p,i)=>(
+                      <div key={i} style={{fontSize:11,color:T.text3,display:"flex",gap:6,alignItems:"center",marginTop:2}}>
+                        <span style={{color:T.green,fontWeight:700}}>Payment {i+1}:</span>
+                        <span>{peso(p.amt)}</span>
+                        <span>on {p.date}</span>
+                        <span style={BDG(T.bbg,T.blue)}>{p.method}</span>
+                        {p.note&&<span>· {p.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ):(
+                  <div style={{fontSize:12,color:T.text3,marginTop:2}}>{b.datePaid||"—"} <span style={BDG(T.bbg,T.blue)}>{b.method||"—"}</span></div>
+                )}
               </div>
             ))}
             <div style={SL}>UNPAID / BALANCE</div>
             {unpaidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>All paid this month!</div>}
             {unpaidBills.map(b=>{const ov=today()>due;return(
-              <div key={b.room} style={{background:ov?T.rbg:T.abg,border:"1px solid "+(ov?T.rbr:T.abr),borderRadius:10,padding:11,marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div><div style={{fontSize:12,color:T.text3,marginTop:2}}>Due {due}{ov&&<span style={{color:T.red,fontWeight:700}}> OVERDUE</span>}</div></div>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}><div style={{fontSize:17,fontWeight:800}}>{peso(b.total)}</div><span style={BDG(b.status==="balance"?T.abg:T.rbg,b.status==="balance"?T.amber:T.red)}>{b.status}</span><button style={{padding:"3px 8px",fontSize:11,fontWeight:700,background:T.bbg,color:T.blue,border:"1px solid "+T.bbr,borderRadius:6,cursor:"pointer"}} onClick={()=>copySMS(b.room)}>SMS</button></div>
+              <div key={b.room} style={{background:ov?T.rbg:T.abg,border:"1px solid "+(ov?T.rbr:T.abr),borderRadius:10,padding:11,marginBottom:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div><div style={{fontSize:12,color:T.text3,marginTop:2}}>Due {due}{ov&&<span style={{color:T.red,fontWeight:700}}> OVERDUE</span>}</div></div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                    <div style={{fontSize:17,fontWeight:800}}>{peso(b.total)}</div>
+                    <span style={BDG(b.status==="balance"?T.abg:T.rbg,b.status==="balance"?T.amber:T.red)}>{b.status}</span>
+                    <button style={{padding:"3px 8px",fontSize:11,fontWeight:700,background:T.bbg,color:T.blue,border:"1px solid "+T.bbr,borderRadius:6,cursor:"pointer"}} onClick={()=>copySMS(b.room)}>SMS</button>
+                  </div>
+                </div>
+                {b.payments&&b.payments.length>0&&(
+                  <div style={{marginTop:6,padding:"6px 8px",background:"rgba(0,0,0,0.1)",borderRadius:6}}>
+                    {b.payments.map((p,i)=>(
+                      <div key={i} style={{fontSize:11,color:T.text2,display:"flex",gap:6,alignItems:"center",marginTop:2}}>
+                        <span style={{color:T.blue,fontWeight:700}}>Paid {i+1}:</span>
+                        <span style={{fontWeight:600}}>{peso(p.amt)}</span>
+                        <span>on {p.date}</span>
+                        <span style={BDG(T.bbg,T.blue)}>{p.method}</span>
+                        {p.note&&<span style={{color:T.text3}}>· {p.note}</span>}
+                      </div>
+                    ))}
+                    <div style={{fontSize:12,fontWeight:700,color:T.amber,marginTop:4}}>Remaining: {peso(Math.max(0,b.total-b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0)))}</div>
+                  </div>
+                )}
               </div>
             );})}
             <div style={SL}>TRANSFER CHECKLIST</div>
