@@ -91,21 +91,14 @@ function TenantModal({open,editData,T,onClose,onSave}){
   );
 }
 
+
 function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,curMon,onClose,onSave}){
   const blank={room:"",rent:"",elec:"",water:"",wifi:"",status:"unpaid",notes:""};
   const[f,sf]=useState(blank);
   const[bals,setBals]=useState([]);
-  const[payments,setPayments]=useState([]); // [{amt, date, method, note}]
+  const[payments,setPayments]=useState([]);
   const[newPay,setNewPay]=useState({amt:"",date:"",method:"gcash",note:""});
-
-  useEffect(()=>{
-    if(!open)return;
-    sf({...blank,...(initForm||{})});
-    setBals(initBals||[]);
-    setPayments(initPayments||[]);
-    setNewPay({amt:"",date:"",method:"gcash",note:""});
-  },[open]);
-
+  useEffect(()=>{if(!open)return;sf({...blank,...(initForm||{})});setBals(initBals||[]);setPayments(initPayments||[]);setNewPay({amt:"",date:"",method:"gcash",note:""});},[open]);
   if(!open)return null;
   const IS={width:"100%",padding:"8px 10px",border:"1px solid "+T.border2,borderRadius:8,fontSize:13,color:T.text,background:T.input,fontFamily:"inherit",boxSizing:"border-box",outline:"none"};
   const LB={fontSize:12,fontWeight:600,color:T.text2,display:"block",marginBottom:3,marginTop:8};
@@ -116,23 +109,20 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
   const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
   const remaining=Math.max(0,total-totalPaid);
   const autoStatus=totalPaid>=total&&total>0?"paid":totalPaid>0?"balance":"unpaid";
-
   const pickRoom=e=>{
     const room=parseInt(e.target.value);
     const t=tenants.find(x=>x.room===room);
     const k=kwhData["r"+room]||{};
-    const prev=[...bills].filter(b=>b.room===room&&b.month<dashMonth).sort((a,z)=>z.month.localeCompare(a.month))[0];
+    const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
     const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
     setBals(pb);
     sf(p=>({...p,room:e.target.value,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):""}));
   };
-
   function addPayment(){
     if(!newPay.amt||!newPay.date){alert("Enter amount and date");return;}
     setPayments(p=>[...p,{...newPay,amt:parseFloat(newPay.amt)}]);
     setNewPay({amt:"",date:"",method:"gcash",note:""});
   }
-
   return(
     <OL T={T} onClose={onClose}>
       <MHdr title="Add / Update Bill" T={T} onClose={onClose}/>
@@ -154,9 +144,7 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
           <button onClick={()=>setBals(b=>b.filter((_,j)=>j!==i))} style={{background:T.rbg,color:T.red,border:"1px solid "+T.rbr,borderRadius:6,padding:"6px 10px",cursor:"pointer",fontWeight:700}}>x</button>
         </div>
       ))}
-
       <div style={{height:1,background:T.border,margin:"12px 0"}}/>
-
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <span style={{fontSize:13,fontWeight:700,color:T.text}}>Payment Log</span>
         <div style={{textAlign:"right"}}>
@@ -166,7 +154,6 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
           {remaining===0&&totalPaid>0&&<div style={{fontSize:12,fontWeight:700,color:T.green}}>Fully paid!</div>}
         </div>
       </div>
-
       {payments.length>0&&(
         <div style={{background:T.bg3,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
           {payments.map((p,i)=>(
@@ -184,18 +171,16 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
           ))}
         </div>
       )}
-
       <div style={{background:T.bbg,border:"1px solid "+T.bbr,borderRadius:8,padding:"10px",marginBottom:8}}>
         <div style={{fontSize:11,fontWeight:700,color:T.blue,marginBottom:6}}>+ ADD PAYMENT</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-          <div><label style={{...LB,marginTop:0}}>Amount (P)</label><input type="number" value={newPay.amt} onChange={up("amt")} placeholder="0" style={IS}/></div>
+          <div><label style={{...LB,marginTop:0}}>Amount</label><input type="number" value={newPay.amt} onChange={up("amt")} placeholder="0" style={IS}/></div>
           <div><label style={{...LB,marginTop:0}}>Date paid</label><input type="date" value={newPay.date} onChange={up("date")} style={IS}/></div>
           <div><label style={{...LB,marginTop:0}}>Method</label><select value={newPay.method} onChange={up("method")} style={IS}>{METHODS.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
           <div><label style={{...LB,marginTop:0}}>Note (optional)</label><input value={newPay.note} onChange={up("note")} placeholder="e.g. GCash ref..." style={IS}/></div>
         </div>
         <button onClick={addPayment} style={{marginTop:8,padding:"6px 14px",border:"none",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,background:T.blue,color:"#fff"}}>Add this payment</button>
       </div>
-
       <div><label style={LB}>Notes</label><input value={f.notes} onChange={u("notes")} placeholder="For your reference only" style={IS}/></div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
         <button onClick={onClose} style={{padding:"8px 14px",border:"1px solid "+T.border2,borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,background:T.bg3,color:T.text}}>Cancel</button>
@@ -204,6 +189,7 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
     </OL>
   );
 }
+
 
 function ExpModal({open,T,onClose,onSave}){
   const[f,sf]=useState({desc:"",amt:"",date:today(),cat:"Electric"});
@@ -379,23 +365,6 @@ export default function App(){
   const histByRoom=useMemo(()=>{const m={};histFiltered.forEach(b=>{if(!m[b.room])m[b.room]=[];m[b.room].push(b);});return m;},[histFiltered]);
   const filtered=tenants.filter(t=>t.name&&t.name.toLowerCase().includes(search.toLowerCase())||String(t.room).includes(search));
 
-  useEffect(()=>{
-    if(curBills.length===0){
-      const active=tenants.filter(t=>t.status!=="vacant"&&t.status!=="moved_out");
-      if(!active.length)return;
-      const nb=[...bills];
-      active.forEach(t=>{
-        if(nb.find(b=>b.room===t.room&&b.month===dashMonth))return;
-        const k=kwh["r"+t.room]||{};
-        const prev=[...nb].filter(b=>b.room===t.room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
-        const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
-        const bt=pb.reduce((a,b)=>a+b.amt,0);
-        const elec=parseFloat((k.bill||0).toFixed(2));
-        nb.push({room:t.room,name:t.name,month:dashMonth,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
-      });
-      setB(nb);
-    }
-  },[]);
 
   function genBills(){
     const active=tenants.filter(t=>t.status!=="vacant"&&t.status!=="moved_out");
@@ -403,7 +372,7 @@ export default function App(){
     let created=0,skipped=0;
     const nb=[...bills];
     active.forEach(t=>{
-      if(nb.find(b=>b.room===t.room&&b.month===curMon)){skipped++;return;}
+      if(nb.find(b=>b.room===t.room&&b.month===dashMonth)){skipped++;return;}
       const k=kwh["r"+t.room]||{};
       const prev=[...nb].filter(b=>b.room===t.room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
@@ -425,7 +394,7 @@ export default function App(){
     }else if(room){
       const t=tenants.find(x=>x.room===room);
       const k=kwh["r"+room]||{};
-      const prev=[...bills].filter(b=>b.room===room&&b.month<dashMonth).sort((a,z)=>z.month.localeCompare(a.month))[0];
+      const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
       setBillForm({room,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):"",status:"unpaid",notes:""});
       setBillBals(pb);
