@@ -346,14 +346,14 @@ export default function App(){
 
   const curMon=cm();
   const[dashY,dashM]=dashMonth.split("-").map(Number);
-  const due=lastDay(dashY,dashM-1);
+  const due=dashMonth+"-25";
   const curBills=bills.filter(b=>b.month===dashMonth);
   const paidBills=curBills.filter(b=>b.status==="paid");
   const unpaidBills=curBills.filter(b=>b.status!=="paid");
   const overdue=unpaidBills.filter(()=>today()>due);
   const allMonths=[...new Set([curMon,...bills.map(b=>b.month)])].sort((a,z)=>z.localeCompare(a)).slice(0,24);
   const[by,bm]=billingMonth.split("-").map(Number);
-  const billingDue=lastDay(by,bm-1);
+  const billingDue=billingMonth+"-25";
   const billingCur=bills.filter(b=>b.month===billingMonth).sort((a,z)=>a.room-z.room);
   const selYear=finMonth.slice(0,4);
   const yearMonths=Array.from({length:12},(_,i)=>selYear+"-"+pad(i+1));
@@ -431,8 +431,7 @@ export default function App(){
     if(!room||!f.month){alert("Select room and month");return;}
     const t=tenants.find(x=>x.room===room);
     const bt=bals.reduce((a,b)=>a+(parseFloat(b.amt)||0),0);
-    const[y2,m2]=f.month.split("-").map(Number);
-    const b={room,name:t?t.name:"",month:f.month,datePaid:f.datePaid,dueDate:lastDay(y2,m2-1),rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,balances:bals,balTotal:bt,total,amtPaid:parseFloat(f.amtPaid)||0,status:f.status,method:f.method,notes:f.notes};
+    const b={room,name:t?t.name:"",month:f.month,datePaid:f.datePaid,dueDate:f.month+"-25",rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,balances:bals,balTotal:bt,total,amtPaid:parseFloat(f.amtPaid)||0,status:f.status,method:f.method,notes:f.notes};
     const ei=bills.findIndex(x=>x.room===room&&x.month===f.month);
     setB(ei>=0?bills.map((x,i)=>i===ei?b:x):[...bills,b]);
     setPrevOpen(false);
@@ -576,7 +575,7 @@ export default function App(){
   const invBals=invB&&invB.balances||[];
   const invBt=invBals.reduce((a,x)=>a+(parseFloat(x.amt)||0),0);
   const invTotal=invRent+invElec+invWater+invWifi+invBt;
-  const invDue=lastDay(now.getFullYear(),now.getMonth());
+  const invDue=cm()+"-25";
   const invDueLbl=new Date(invDue+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
   const mLbl=now.toLocaleDateString("en-PH",{month:"long",year:"numeric"});
   const dLbl=now.toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
@@ -1176,6 +1175,28 @@ export default function App(){
                 ))}
               </div>
               {t.notes&&<div style={{background:T.abg,border:"1px solid "+T.abr,borderRadius:8,padding:"8px 10px",fontSize:12,color:T.amber,marginBottom:12}}>Note: {t.notes}</div>}
+              <div style={{height:1,background:T.border,margin:"12px 0"}}/>
+              <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>KWH History</div>
+              {(k.hist&&k.hist.length>0)?(
+                <div style={{background:T.bg3,borderRadius:8,padding:"8px 10px",marginBottom:12,overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                    <thead><tr>{["Month","Prev","Curr","KWH Used","Bill"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:T.text3,fontWeight:700,textTransform:"uppercase",fontSize:10,borderBottom:"1px solid "+T.border}}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {[...k.hist].sort((a,z)=>z.month.localeCompare(a.month)).map((h,i)=>(
+                        <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+                          <td style={{padding:"4px 8px",color:T.text,fontWeight:600}}>{fmt(h.month)}</td>
+                          <td style={{padding:"4px 8px",color:T.text3}}>{h.prev||0}</td>
+                          <td style={{padding:"4px 8px",color:T.text3}}>{h.curr||0}</td>
+                          <td style={{padding:"4px 8px",color:T.blue,fontWeight:700}}>{h.kwh||0} kwh</td>
+                          <td style={{padding:"4px 8px",color:T.green,fontWeight:700}}>{peso(h.bill||0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ):(
+                <div style={{fontSize:12,color:T.text3,marginBottom:12}}>No KWH records yet. Apply readings in the KWH tab to build history.</div>
+              )}
               <div style={{height:1,background:T.border,margin:"12px 0"}}/>
               <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Payment history ({rb.length} records)</div>
               <div style={{maxHeight:280,overflowY:"auto"}}>
