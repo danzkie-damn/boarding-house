@@ -121,7 +121,7 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
     const room=parseInt(e.target.value);
     const t=tenants.find(x=>x.room===room);
     const k=kwhData["r"+room]||{};
-    const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
+    const prev=[...bills].filter(b=>b.room===room&&b.month<dashMonth).sort((a,z)=>z.month.localeCompare(a.month))[0];
     const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
     setBals(pb);
     sf(p=>({...p,room:e.target.value,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):""}));
@@ -347,6 +347,7 @@ export default function App(){
   const[socoEdit,setSocoEdit]=useState(null);
   const[socoEditIdx,setSocoEditIdx]=useState(-1);
   const[prevOpen,setPrevOpen]=useState(false);
+  const[dashMonth,setDashMonth]=useState(cm());
 
   const sv=(k,v,s)=>{s(v);LS.set(k,v);};
   const setT=v=>sv("tenants",v,setTenants);
@@ -358,8 +359,9 @@ export default function App(){
   const setSc=v=>sv("soco",v,setSoco);
 
   const curMon=cm();
-  const due=lastDay(now.getFullYear(),now.getMonth());
-  const curBills=bills.filter(b=>b.month===curMon);
+  const[dashY,dashM]=dashMonth.split("-").map(Number);
+  const due=lastDay(dashY,dashM-1);
+  const curBills=bills.filter(b=>b.month===dashMonth);
   const paidBills=curBills.filter(b=>b.status==="paid");
   const unpaidBills=curBills.filter(b=>b.status!=="paid");
   const overdue=unpaidBills.filter(()=>today()>due);
@@ -383,13 +385,13 @@ export default function App(){
       if(!active.length)return;
       const nb=[...bills];
       active.forEach(t=>{
-        if(nb.find(b=>b.room===t.room&&b.month===curMon))return;
+        if(nb.find(b=>b.room===t.room&&b.month===dashMonth))return;
         const k=kwh["r"+t.room]||{};
         const prev=[...nb].filter(b=>b.room===t.room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
         const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
         const bt=pb.reduce((a,b)=>a+b.amt,0);
         const elec=parseFloat((k.bill||0).toFixed(2));
-        nb.push({room:t.room,name:t.name,month:curMon,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
+        nb.push({room:t.room,name:t.name,month:dashMonth,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
       });
       setB(nb);
     }
@@ -407,7 +409,7 @@ export default function App(){
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
       const bt=pb.reduce((a,b)=>a+b.amt,0);
       const elec=parseFloat((k.bill||0).toFixed(2));
-      nb.push({room:t.room,name:t.name,month:curMon,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
+      nb.push({room:t.room,name:t.name,month:dashMonth,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
       created++;
     });
     setB(nb);
@@ -423,7 +425,7 @@ export default function App(){
     }else if(room){
       const t=tenants.find(x=>x.room===room);
       const k=kwh["r"+room]||{};
-      const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
+      const prev=[...bills].filter(b=>b.room===room&&b.month<dashMonth).sort((a,z)=>z.month.localeCompare(a.month))[0];
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
       setBillForm({room,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):"",status:"unpaid",notes:""});
       setBillBals(pb);
@@ -442,7 +444,7 @@ export default function App(){
     const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
     const lastPay=payments.length>0?payments[payments.length-1]:null;
     const b={
-      room,name:t?t.name:"",month:curMon,dueDate:due,
+      room,name:t?t.name:"",month:dashMonth,dueDate:due,
       rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,
       balances:bals,balTotal:bt,total,
       payments,amtPaid:totalPaid,
@@ -450,7 +452,7 @@ export default function App(){
       method:lastPay?lastPay.method:"",
       status:autoStatus,notes:f.notes
     };
-    const ei=bills.findIndex(x=>x.room===room&&x.month===curMon);
+    const ei=bills.findIndex(x=>x.room===room&&x.month===dashMonth);
     setB(ei>=0?bills.map((x,i)=>i===ei?b:x):[...bills,b]);
     setBillOpen(false);
   }
@@ -614,7 +616,7 @@ export default function App(){
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",fontSize:14}}>
 
       <TenantModal open={tenantOpen} editData={tenantEdit} T={T} onClose={()=>setTenantOpen(false)} onSave={saveTenant}/>
-      <BillModal open={billOpen} initForm={billForm} initBals={billBals} initPayments={billPayments} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={curMon} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
+      <BillModal open={billOpen} initForm={billForm} initBals={billBals} initPayments={billPayments} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={dashMonth} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
       <ExpModal open={expOpen} T={T} onClose={()=>setExpOpen(false)} onSave={(e)=>{setE([...expenses,e]);setExpOpen(false);}}/>
       <SocoModal open={socoOpen} editRec={socoEdit} T={T} onClose={()=>setSocoOpen(false)} onSave={(f)=>{const ns=socoEditIdx>=0?soco.map((x,i)=>i===socoEditIdx?f:x):[...soco,f];setSc(ns);setSocoOpen(false);}}/>
       <PrevBillModal open={prevOpen} T={T} tenants={tenants} onClose={()=>setPrevOpen(false)} onSave={savePrevBill}/>
@@ -648,6 +650,17 @@ export default function App(){
 
         {tab===0&&(
           <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:6}}>
+              <h2 style={{margin:0,fontSize:16,fontWeight:700}}>Dashboard</h2>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:T.text3}}>Viewing:</span>
+                <select value={dashMonth} onChange={e=>setDashMonth(e.target.value)} style={{padding:"6px 10px",border:"1px solid "+T.border2,borderRadius:8,fontSize:13,color:T.text,background:T.input,fontFamily:"inherit",cursor:"pointer"}}>
+                  {allMonths.map(m=><option key={m} value={m}>{fmt(m)}{m===curMon?" (current)":""}</option>)}
+                </select>
+                {dashMonth!==curMon&&<button onClick={()=>setDashMonth(curMon)} style={{padding:"5px 10px",border:"1px solid "+T.border2,borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700,background:T.bg3,color:T.text}}>Back to current</button>}
+              </div>
+            </div>
+            {dashMonth!==curMon&&<div style={{background:T.bbg,border:"1px solid "+T.bbr,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.blue,marginBottom:10,fontWeight:600}}>Viewing: {fmt(dashMonth)} bills · Paid on any date</div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
               {[[T.green,"Active tenants",tenants.filter(t=>t.status!=="vacant"&&t.status!=="moved_out").length],[T.green,"Paid",paidBills.length],[T.red,"Unpaid",unpaidBills.length],[T.blue,"Total billed",peso(curBills.reduce((a,b)=>a+b.total,0))]].map(([c,l,v])=>(
                 <div key={l} style={ST(c)}><div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:T.text3}}>{l}</div><div style={{fontSize:20,fontWeight:800,color:c,marginTop:3}}>{v}</div></div>
@@ -656,11 +669,11 @@ export default function App(){
             {overdue.length>0&&<div style={{background:T.rbg,border:"1px solid "+T.rbr,borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:600,color:T.red,marginBottom:10}}>OVERDUE: {overdue.map(b=>"Room "+b.room+" ("+b.name+")").join(", ")}</div>}
             {curBills.length===0&&tenants.filter(t=>t.status!=="vacant"&&t.status!=="moved_out").length>0&&(
               <div style={{background:T.gbg,border:"1px solid "+T.gbr,borderRadius:10,padding:12,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontWeight:700,color:T.green,fontSize:13}}>No bills yet this month</div><div style={{fontSize:12,color:T.text3,marginTop:2}}>Auto-create for all active tenants</div></div>
+                <div><div style={{fontWeight:700,color:T.green,fontSize:13}}>No bills yet for {fmt(dashMonth)}</div><div style={{fontSize:12,color:T.text3,marginTop:2}}>Auto-create for all active tenants</div></div>
                 <button style={BT(T.green,"#071a0e")} onClick={genBills}>Generate bills</button>
               </div>
             )}
-            <div style={SL}>PAID THIS MONTH</div>
+            <div style={SL}>PAID — {fmt(dashMonth).toUpperCase()}</div>
             {paidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>None paid yet.</div>}
             {paidBills.map(b=>(
               <div key={b.room} style={{background:T.gbg,border:"1px solid "+T.gbr,borderRadius:10,padding:11,marginBottom:7}}>
@@ -685,7 +698,7 @@ export default function App(){
                 )}
               </div>
             ))}
-            <div style={SL}>UNPAID / BALANCE</div>
+            <div style={SL}>UNPAID / BALANCE — {fmt(dashMonth).toUpperCase()}</div>
             {unpaidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>All paid this month!</div>}
             {unpaidBills.map(b=>{const ov=today()>due;return(
               <div key={b.room} style={{background:ov?T.rbg:T.abg,border:"1px solid "+(ov?T.rbr:T.abr),borderRadius:10,padding:11,marginBottom:7}}>
@@ -713,7 +726,7 @@ export default function App(){
                 )}
               </div>
             );})}
-            <div style={SL}>TRANSFER CHECKLIST</div>
+            <div style={SL}>TRANSFER CHECKLIST — {fmt(dashMonth).toUpperCase()}</div>
             {curBills.length===0&&<div style={{color:T.text3,fontSize:13}}>No bills yet.</div>}
             {curBills.map(b=>{const tkey=b.room+"-"+b.month;const tr=transfers[tkey]||{};const all=tr.room&&tr.elec&&tr.water&&tr.wifi;return(
               <div key={b.room} style={{padding:"9px 0",borderBottom:"1px solid "+T.border}}>
