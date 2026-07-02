@@ -388,7 +388,8 @@ export default function App(){
   function openBillModal(room,month){
     const b=month?bills.find(x=>x.room==room&&x.month===month):null;
     if(b){
-      setBillForm({room:b.room,rent:b.rent||"",elec:b.elec||"",water:b.water||"",wifi:b.wifi||"",status:b.status||"unpaid",notes:b.notes||""});
+      // Pass originalMonth so saveBill knows to keep the bill in its correct month
+      setBillForm({room:b.room,rent:b.rent||"",elec:b.elec||"",water:b.water||"",wifi:b.wifi||"",status:b.status||"unpaid",notes:b.notes||"",originalMonth:b.month});
       setBillBals(b.balances||[]);
       setBillPayments(b.payments||[]);
     }else if(room){
@@ -412,8 +413,11 @@ export default function App(){
     const bt=bals.reduce((a,b)=>a+(parseFloat(b.amt)||0),0);
     const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
     const lastPay=payments.length>0?payments[payments.length-1]:null;
+    // Use the bill's original month if editing, or dashMonth if creating new
+    const billMonth=f.originalMonth||dashMonth;
+    const billDue=billMonth+"-25";
     const b={
-      room,name:t?t.name:"",month:dashMonth,dueDate:due,
+      room,name:t?t.name:"",month:billMonth,dueDate:billDue,
       rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,
       balances:bals,balTotal:bt,total,
       payments,amtPaid:totalPaid,
@@ -421,7 +425,8 @@ export default function App(){
       method:lastPay?lastPay.method:"",
       status:autoStatus,notes:f.notes
     };
-    const ei=bills.findIndex(x=>x.room===room&&x.month===dashMonth);
+    // Find by original month to avoid moving bill to wrong month
+    const ei=bills.findIndex(x=>x.room===room&&x.month===billMonth);
     setB(ei>=0?bills.map((x,i)=>i===ei?b:x):[...bills,b]);
     setBillOpen(false);
   }
