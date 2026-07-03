@@ -315,6 +315,7 @@ export default function App(){
   const[soco,setSoco]=useState(LS.get("soco")||[]);
   const[billingMonth,setBillingMonth]=useState(cm());
   const[invRoom,setInvRoom]=useState("");
+  const[invMonth,setInvMonth]=useState(cm());
   const[finMonth,setFinMonth]=useState(cm());
   const[histRoom,setHistRoom]=useState("");
   const[histYear,setHistYear]=useState(String(now.getFullYear()));
@@ -571,18 +572,26 @@ export default function App(){
 
   // Invoice
   const invT=tenants.find(x=>x.room==invRoom);
-  const invB=bills.find(x=>x.room==invRoom&&x.month===curMon);
+  const invB=bills.find(x=>x.room==invRoom&&x.month===invMonth);
   const invK=kwh["r"+invRoom]||{};
+  // Get KWH history for invMonth if available
+  const invKHist=(invK.hist||[]).find(h=>h.month===invMonth)||{};
+  const invPrev=invKHist.prev!==undefined?invKHist.prev:(invK.prev||0);
+  const invCurr=invKHist.curr!==undefined?invKHist.curr:(invK.curr||0);
+  const invKwh=invKHist.kwh!==undefined?invKHist.kwh:(invK.kwh||0);
   const invElec=invB?invB.elec:(invK.bill||0);
   const invWater=invB?invB.water:(invT?invT.water||0:0);
   const invWifi=invB?invB.wifi:(invT?invT.wifi||0:0);
   const invRent=invB?invB.rent:(invT?invT.rent||0:0);
   const invBals=invB&&invB.balances||[];
+  const invPays=invB&&invB.payments||[];
   const invBt=invBals.reduce((a,x)=>a+(parseFloat(x.amt)||0),0);
   const invTotal=invRent+invElec+invWater+invWifi+invBt;
-  const invDue=cm()+"-25";
+  const invTotalPaid=invPays.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
+  const invRemaining=Math.max(0,invTotal-invTotalPaid);
+  const invDue=invMonth+"-25";
   const invDueLbl=new Date(invDue+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
-  const mLbl=now.toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+  const mLbl=fmt(invMonth);
   const dLbl=now.toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
 
   return (
@@ -925,35 +934,50 @@ export default function App(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:6}}>
               <h2 style={{margin:0,fontSize:16,fontWeight:700}}>Invoice</h2>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                <select value={invRoom} onChange={e=>setInvRoom(e.target.value)} style={{...IS,width:160}}><option value="">Select room...</option>{tenants.map(t=><option key={t.room} value={t.room}>Room {t.room} - {t.name}</option>)}</select>
+                <select value={invRoom} onChange={e=>setInvRoom(e.target.value)} style={{...IS,width:155}}><option value="">Select room...</option>{tenants.map(t=><option key={t.room} value={t.room}>Room {t.room} - {t.name}</option>)}</select>
+                <select value={invMonth} onChange={e=>setInvMonth(e.target.value)} style={{...IS,width:130}}>{allMonths.map(m=><option key={m} value={m}>{fmt(m)}</option>)}</select>
                 <button style={BSM(T.bg3,T.text)} onClick={()=>copySMS(parseInt(invRoom)||0)}>Copy SMS</button>
                 <button style={BSM(T.blue,"#fff")} onClick={printAll}>Print all</button>
               </div>
             </div>
-            {!invRoom?<div style={{color:T.text3,padding:40,textAlign:"center"}}>Select a room to generate invoice.</div>:(
-              <div style={{background:dark?"#1a1d27":"#fff",border:"1px solid "+T.border,borderRadius:12,padding:18,maxWidth:400,margin:"0 auto",color:T.text}}>
+            {!invRoom?<div style={{color:T.text3,padding:40,textAlign:"center"}}>Select a room and month to generate invoice.</div>:(
+              <div style={{background:dark?"#1a1d27":"#fff",border:"1px solid "+T.border,borderRadius:12,padding:18,maxWidth:420,margin:"0 auto",color:T.text}}>
                 <div style={{textAlign:"center",borderBottom:"2px solid "+T.green,paddingBottom:10,marginBottom:12}}>
                   <div style={{fontSize:20,fontWeight:800,color:T.green}}>BOARDING HOUSE</div>
                   <div style={{fontSize:14,fontWeight:700,marginTop:3}}>{mLbl}</div>
-                  <div style={{fontSize:11,color:T.text3,marginTop:1}}>{dLbl}</div>
+                  <div style={{fontSize:11,color:T.text3,marginTop:1}}>Printed: {dLbl}</div>
                 </div>
                 <div style={{background:T.bg3,borderRadius:8,padding:"9px 11px",marginBottom:12}}>
                   <div style={{fontSize:15,fontWeight:700}}>Room {invRoom} - {invT?invT.name:"—"}</div>
                   {invT&&invT.phone&&<div style={{fontSize:11,color:T.text3,marginTop:1}}>{invT.phone}</div>}
                 </div>
                 <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:T.text3,marginBottom:5,marginTop:10}}>Electricity</div>
-                {[["Rate","P"+kwhRate+"/kwh"],["Previous",invK.prev||0],["Current",invK.curr||0],["KWH used",(invK.kwh||0)+" kwh"],["Electric bill",peso(invElec)]].map(([l,v])=>(
+                {[["Rate","P"+kwhRate+"/kwh"],["Previous reading",invPrev],["Current reading",invCurr],["KWH used",invKwh+" kwh"],["Electric bill",peso(invElec)]].map(([l,v])=>(
                   <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+T.border,fontSize:13}}><span style={{color:T.text2}}>{l}</span><span>{v}</span></div>
                 ))}
                 <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:T.text3,marginBottom:5,marginTop:10}}>Charges</div>
-                {[["Water",peso(invWater)],["Room rent",peso(invRent)],["Wifi",peso(invWifi)]].map(([l,v])=>(
+                {[["Room rent",peso(invRent)],["Water",peso(invWater)],["Wifi",peso(invWifi)]].map(([l,v])=>(
                   <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+T.border,fontSize:13}}><span style={{color:T.text2}}>{l}</span><span>{v}</span></div>
                 ))}
                 {invBals.length>0&&<div>
-                  <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:T.text3,marginBottom:5,marginTop:10}}>Balances</div>
+                  <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:T.text3,marginBottom:5,marginTop:10}}>Extra Balances</div>
                   {invBals.map((bl,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+T.border,fontSize:13}}><span style={{color:T.text2}}>{bl.desc}</span><span style={{color:T.amber}}>{peso(bl.amt)}</span></div>)}
                 </div>}
-                <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 3px",fontSize:16,fontWeight:800,borderTop:"2px solid "+T.border,marginTop:8,color:T.green}}><span>Total due</span><span>{peso(invTotal)}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 3px",fontSize:16,fontWeight:800,borderTop:"2px solid "+T.border,marginTop:8,color:T.green}}><span>Total bill</span><span>{peso(invTotal)}</span></div>
+                {invPays.length>0&&<div style={{marginTop:8}}>
+                  <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",color:T.text3,marginBottom:4}}>Payments made</div>
+                  {invPays.map((p,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:12}}>
+                      <span style={{color:T.text3}}>Payment {i+1} · {p.date} · {p.method}</span>
+                      <span style={{color:T.blue,fontWeight:700}}>{peso(p.amt)}</span>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0 3px",fontSize:14,fontWeight:800,borderTop:"1px solid "+T.border,marginTop:4,color:invRemaining>0?T.amber:T.green}}>
+                    <span>{invRemaining>0?"Remaining balance":"Fully paid"}</span>
+                    <span>{invRemaining>0?peso(invRemaining):"✓"}</span>
+                  </div>
+                </div>}
+                {invB&&invB.status&&<div style={{textAlign:"center",marginTop:8}}><span style={{...BDG(invB.status==="paid"?T.green:invB.status==="balance"?T.abg:T.rbg,invB.status==="paid"?"#071a0e":invB.status==="balance"?T.amber:T.red),fontSize:12,padding:"3px 12px"}}>{invB.status.toUpperCase()}</span></div>}
                 <div style={{textAlign:"center",marginTop:10,fontSize:12,fontWeight:600,color:T.amber}}>Due on or before {invDueLbl}</div>
               </div>
             )}
