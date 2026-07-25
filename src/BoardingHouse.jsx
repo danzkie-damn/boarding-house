@@ -595,7 +595,8 @@ export default function App(){
   const invTotal=invRent+invElec+invWater+invWifi+invBt;
   const invTotalPaid=invPays.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
   const invRemaining=Math.max(0,invTotal-invTotalPaid);
-  const invDue=invMonth+"-25";
+  const[invY,invM]=invMonth.split("-").map(Number);
+  const invDue=lastDay(invY,invM-1);
   const invDueLbl=new Date(invDue+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
   const mLbl=fmt(invMonth);
   const dLbl=now.toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});
