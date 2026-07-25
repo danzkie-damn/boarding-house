@@ -660,54 +660,78 @@ export default function App(){
             {paidBills.map(b=>(
               <div key={b.room} style={{background:T.gbg,border:"1px solid "+T.gbr,borderRadius:10,padding:11,marginBottom:7}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:T.green}}>{peso(b.total)}</div><span style={BDG(T.green,"#071a0e")}>PAID</span></div>
-                </div>
-                {b.payments&&b.payments.length>0?(
-                  <div style={{marginTop:6}}>
-                    {b.payments.map((p,i)=>(
-                      <div key={i} style={{fontSize:11,color:T.text3,display:"flex",gap:6,alignItems:"center",marginTop:2}}>
-                        <span style={{color:T.green,fontWeight:700}}>Payment {i+1}:</span>
-                        <span>{peso(p.amt)}</span>
-                        <span>on {p.date}</span>
-                        <span style={BDG(T.bbg,T.blue)}>{p.method}</span>
-                        {p.note&&<span>· {p.note}</span>}
-                      </div>
-                    ))}
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div>
+                    <div style={{fontSize:12,color:T.text3,marginTop:2}}>Bill: {peso(b.total)}</div>
                   </div>
-                ):(
-                  <div style={{fontSize:12,color:T.text3,marginTop:2}}>{b.datePaid||"—"} <span style={BDG(T.bbg,T.blue)}>{b.method||"—"}</span></div>
-                )}
-              </div>
-            ))}
-            <div style={SL}>UNPAID / BALANCE — {fmt(dashMonth).toUpperCase()}</div>
-            {unpaidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>All paid this month!</div>}
-            {unpaidBills.map(b=>{const ov=today()>due;return(
-              <div key={b.room} style={{background:ov?T.rbg:T.abg,border:"1px solid "+(ov?T.rbr:T.abr),borderRadius:10,padding:11,marginBottom:7}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div><div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div><div style={{fontSize:12,color:T.text3,marginTop:2}}>Due {due}{ov&&<span style={{color:T.red,fontWeight:700}}> OVERDUE</span>}</div></div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                    <div style={{fontSize:17,fontWeight:800}}>{peso(b.total)}</div>
-                    <span style={BDG(b.status==="balance"?T.abg:T.rbg,b.status==="balance"?T.amber:T.red)}>{b.status}</span>
-                    <button style={{padding:"3px 8px",fontSize:11,fontWeight:700,background:T.bbg,color:T.blue,border:"1px solid "+T.bbr,borderRadius:6,cursor:"pointer"}} onClick={()=>copySMS(b.room)}>SMS</button>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:17,fontWeight:800,color:T.green}}>{peso(b.payments&&b.payments.length>0?b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):b.total)}</div>
+                    <div style={{fontSize:11,color:T.text3}}>paid</div>
+                    <span style={BDG(T.green,"#071a0e")}>PAID</span>
                   </div>
                 </div>
                 {b.payments&&b.payments.length>0&&(
-                  <div style={{marginTop:6,padding:"6px 8px",background:"rgba(0,0,0,0.1)",borderRadius:6}}>
+                  <div style={{marginTop:6,padding:"6px 8px",background:T.gbg,borderRadius:6,border:"1px solid "+T.gbr}}>
                     {b.payments.map((p,i)=>(
-                      <div key={i} style={{fontSize:11,color:T.text2,display:"flex",gap:6,alignItems:"center",marginTop:2}}>
-                        <span style={{color:T.blue,fontWeight:700}}>Paid {i+1}:</span>
-                        <span style={{fontWeight:600}}>{peso(p.amt)}</span>
-                        <span>on {p.date}</span>
+                      <div key={i} style={{fontSize:11,color:T.text2,display:"flex",gap:6,alignItems:"center",marginTop:2,flexWrap:"wrap"}}>
+                        <span style={{color:T.green,fontWeight:700}}>#{i+1}</span>
+                        <span style={{fontWeight:700}}>{peso(p.amt)}</span>
+                        <span style={{color:T.text3}}>on {p.date}</span>
                         <span style={BDG(T.bbg,T.blue)}>{p.method}</span>
                         {p.note&&<span style={{color:T.text3}}>· {p.note}</span>}
                       </div>
                     ))}
-                    <div style={{fontSize:12,fontWeight:700,color:T.amber,marginTop:4}}>Remaining: {peso(Math.max(0,b.total-b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0)))}</div>
                   </div>
                 )}
+                {(!b.payments||b.payments.length===0)&&<div style={{fontSize:12,color:T.text3,marginTop:2}}>{b.datePaid||"—"} <span style={BDG(T.bbg,T.blue)}>{b.method||"—"}</span></div>}
               </div>
-            );})}
+            ))}
+            <div style={SL}>UNPAID / BALANCE — {fmt(dashMonth).toUpperCase()}</div>
+            {unpaidBills.length===0&&<div style={{color:T.text3,fontSize:13}}>All paid this month!</div>}
+            {unpaidBills.map(b=>{
+              const ov=today()>due;
+              const bPaid=b.payments&&b.payments.length>0?b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):(parseFloat(b.amtPaid)||0);
+              const bRemaining=Math.max(0,b.total-bPaid);
+              return(
+                <div key={b.room} style={{background:ov?T.rbg:T.abg,border:"1px solid "+(ov?T.rbr:T.abr),borderRadius:10,padding:11,marginBottom:7}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14}}>{b.name} <span style={{color:T.text3,fontWeight:400,fontSize:12}}>Room {b.room}</span></div>
+                      <div style={{fontSize:12,color:T.text3,marginTop:2}}>Due {due}{ov&&<span style={{color:T.red,fontWeight:700}}> OVERDUE</span>}</div>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                      <div style={{fontSize:11,color:T.text3}}>Total bill</div>
+                      <div style={{fontSize:15,fontWeight:800,color:T.text}}>{peso(b.total)}</div>
+                      <span style={BDG(b.status==="balance"?T.abg:T.rbg,b.status==="balance"?T.amber:T.red)}>{b.status}</span>
+                      <button style={{padding:"3px 8px",fontSize:11,fontWeight:700,background:T.bbg,color:T.blue,border:"1px solid "+T.bbr,borderRadius:6,cursor:"pointer",marginTop:2}} onClick={()=>copySMS(b.room)}>SMS</button>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:8,padding:"8px 10px",background:"rgba(0,0,0,0.12)",borderRadius:8}}>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase"}}>Paid so far</div>
+                      <div style={{fontSize:15,fontWeight:800,color:T.blue}}>{bPaid>0?peso(bPaid):"—"}</div>
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase"}}>Still owes</div>
+                      <div style={{fontSize:15,fontWeight:800,color:bRemaining>0?T.amber:T.green}}>{bRemaining>0?peso(bRemaining):"Fully paid"}</div>
+                    </div>
+                  </div>
+                  {b.payments&&b.payments.length>0&&(
+                    <div style={{marginTop:6}}>
+                      {b.payments.map((p,i)=>(
+                        <div key={i} style={{fontSize:11,color:T.text2,display:"flex",gap:6,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
+                          <span style={{color:T.blue,fontWeight:700}}>#{i+1}</span>
+                          <span style={{fontWeight:700}}>{peso(p.amt)}</span>
+                          <span style={{color:T.text3}}>on {p.date}</span>
+                          <span style={BDG(T.bbg,T.blue)}>{p.method}</span>
+                          {p.note&&<span style={{color:T.text3}}>· {p.note}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div style={SL}>TRANSFER CHECKLIST — {fmt(dashMonth).toUpperCase()}</div>
             {curBills.length===0&&<div style={{color:T.text3,fontSize:13}}>No bills yet.</div>}
             {curBills.map(b=>{const tkey=b.room+"-"+b.month;const tr=transfers[tkey]||{};const all=tr.room&&tr.elec&&tr.water&&tr.wifi;return(
@@ -771,7 +795,17 @@ export default function App(){
                         {t.contractEnd&&<div style={{fontSize:12,color:today()>t.contractEnd?T.red:T.text3,marginTop:2}}>Contract: {t.contractEnd}</div>}
                         <div style={{marginTop:6,fontSize:12,fontWeight:600,color:r.color}}>{r.label} ({r.score}%)</div>
                         <div style={{marginTop:8,padding:"7px 9px",background:ip?T.gbg:T.abg,border:"1px solid "+(ip?T.gbr:T.abr),borderRadius:7,fontSize:12,fontWeight:600,color:ip?T.green:T.amber}}>Due: {due}{b?" · "+b.status.toUpperCase():" · No bill"}</div>
-                        {b&&<div style={{marginTop:7,fontSize:15,fontWeight:800,color:ip?T.green:T.text}}>Total: {peso(b.total)}</div>}
+                        {b&&(()=>{
+                          const bPaid2=b.payments&&b.payments.length>0?b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):(parseFloat(b.amtPaid)||0);
+                          const bRem2=Math.max(0,b.total-bPaid2);
+                          return(
+                            <div style={{marginTop:6}}>
+                              <div style={{fontSize:15,fontWeight:800,color:ip?T.green:T.text}}>Total: {peso(b.total)}</div>
+                              {bPaid2>0&&!ip&&<div style={{fontSize:12,color:T.blue,marginTop:2}}>Paid: {peso(bPaid2)}</div>}
+                              {bRem2>0&&<div style={{fontSize:12,fontWeight:700,color:T.amber,marginTop:1}}>Remaining: {peso(bRem2)}</div>}
+                            </div>
+                          );
+                        })()}
                         {t.notes&&<div style={{marginTop:5,fontSize:11,color:T.amber,fontStyle:"italic"}}>Note: {t.notes}</div>}
                         {t.type==="new"&&cd<MIC.length&&<div style={{marginTop:5}}><div style={{fontSize:12,color:T.blue}}>{cd}/{MIC.length} move-in items</div><div style={{height:4,background:T.bg4,borderRadius:2,marginTop:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.round(cd/MIC.length*100)+"%",background:T.blue,borderRadius:2}}/></div></div>}
                         <div style={{display:"flex",gap:5,marginTop:10,flexWrap:"wrap"}}>
