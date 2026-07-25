@@ -375,9 +375,15 @@ export default function App(){
     active.forEach(t=>{
       if(nb.find(b=>b.room===t.room&&b.month===dashMonth)){skipped++;return;}
       const k=kwh["r"+t.room]||{};
-      const prev=[...nb].filter(b=>b.room===t.room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
-      const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
-      const bt=pb.reduce((a,b)=>a+b.amt,0);
+      // Carry over remaining balance from all unpaid/partial previous bills
+      const prevBills=[...nb].filter(b=>b.room===t.room&&b.month<dashMonth&&b.status!=="paid");
+      const pb=[];
+      prevBills.forEach(prev=>{
+        const prevPaid=prev.payments&&prev.payments.length>0?prev.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):(parseFloat(prev.amtPaid)||0);
+        const prevRem=Math.max(0,(prev.total||0)-prevPaid);
+        if(prevRem>0)pb.push({desc:"Balance from "+fmt(prev.month),amt:parseFloat(prevRem.toFixed(2))});
+      });
+      const bt=parseFloat(pb.reduce((a,b)=>a+b.amt,0).toFixed(2));
       const elec=parseFloat((k.bill||0).toFixed(2));
       nb.push({room:t.room,name:t.name,month:dashMonth,datePaid:"",dueDate:due,rent:t.rent||0,elec,water:t.water||0,wifi:t.wifi||0,balances:pb,balTotal:bt,total:(t.rent||0)+elec+(t.water||0)+(t.wifi||0)+bt,amtPaid:0,status:"unpaid",method:"",notes:""});
       created++;
@@ -878,7 +884,7 @@ export default function App(){
             </div>
             <div style={{border:"1px solid "+T.border,borderRadius:10,overflow:"hidden",overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:780}}>
-              <thead><tr>{["Room","Name","Due","Paid on","Balances","Rent","Elec","Water","Wifi","Total","Status","Transfer",""].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Room","Name","Due","Balances","Rent","Elec","Water","Wifi","Total","Paid","Remaining","Status","Transfer",""].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
               <tbody>
                 {billingCur.length===0&&<tr><td colSpan={13} style={{...TD,padding:30,textAlign:"center",color:T.text3}}>No bills for {fmt(billingMonth)}.</td></tr>}
                 {billingCur.map(b=>{
@@ -890,13 +896,14 @@ export default function App(){
                       <td style={TD}><strong style={{color:T.green}}>Rm {b.room}</strong></td>
                       <td style={{...TD,fontWeight:600}}>{b.name}</td>
                       <td style={{...TD,fontSize:11,color:ov?T.red:T.text2}}>{billingDue}</td>
-                      <td style={{...TD,fontSize:11,color:T.text3}}>{b.datePaid||"—"}</td>
                       <td style={TD}>
                         {b.balances&&b.balances.length?b.balances.map((bl,i)=><div key={i} style={{color:T.amber,fontSize:11}}>{bl.desc}: <b>{peso(bl.amt)}</b></div>):<span style={{color:T.text3}}>—</span>}
                         <button onClick={()=>qBal(b.room,b.month)} style={{fontSize:10,background:T.abg,color:T.amber,border:"1px solid "+T.abr,borderRadius:4,padding:"2px 6px",cursor:"pointer",marginTop:2,display:"block"}}>+bal</button>
                       </td>
                       {["rent","elec","water","wifi"].map(field=><td key={field} style={{...TD,fontSize:12,color:T.text2}}>{peso(b[field])}</td>)}
                       <td style={{...TD,fontWeight:800,color:ip?T.green:T.text}}>{peso(b.total)}</td>
+                      <td style={{...TD,fontWeight:700,color:T.blue}}>{(()=>{const paid=b.payments&&b.payments.length>0?b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):(parseFloat(b.amtPaid)||0);return paid>0?peso(paid):"—";})()}</td>
+                      <td style={{...TD,fontWeight:700,color:T.amber}}>{(()=>{const paid=b.payments&&b.payments.length>0?b.payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0):(parseFloat(b.amtPaid)||0);const rem=Math.max(0,b.total-paid);return rem>0?peso(rem):ip?<span style={{color:T.green}}>✓ Full</span>:"—";})()}</td>
                       <td style={TD}>
                         <span style={BDG(ip?T.green:ib?T.abg:T.rbg,ip?"#071a0e":ib?T.amber:T.red)}>{b.status}</span>
                         {b.method&&<div style={{marginTop:3}}><span style={BDG(T.bg4,T.text2)}>{b.method}</span></div>}
