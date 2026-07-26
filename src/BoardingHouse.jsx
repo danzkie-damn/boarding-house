@@ -215,15 +215,36 @@ function ExpModal({open,T,onClose,onSave}){
   );
 }
 
-function SocoModal({open,editRec,T,onClose,onSave}){
+function SocoModal({open,editRec,T,onClose,onSave,bills}){
   const blank={month:"",kwhUsed:"",socoRate:"",socoBill:"",myRate:"",totalBoarderElec:"",tapal:"",notes:""};
   const[f,sf]=useState(blank);
-  useEffect(()=>{if(open)sf(editRec||blank);},[open]);
+
+  useEffect(()=>{
+    if(!open)return;
+    if(editRec){sf(editRec);}
+    else{sf(blank);}
+  },[open]);
+
+  // Auto-calculate total boarder electric when month changes
+  useEffect(()=>{
+    if(!f.month||!bills)return;
+    const monthBills=bills.filter(b=>b.month===f.month);
+    const totalElec=monthBills.reduce((a,b)=>a+(parseFloat(b.elec)||0),0);
+    if(totalElec>0){
+      sf(p=>({...p,totalBoarderElec:totalElec.toFixed(2)}));
+    }
+  },[f.month]);
+
   if(!open)return null;
   const IS={width:"100%",padding:"8px 10px",border:"1px solid "+T.border2,borderRadius:8,fontSize:13,color:T.text,background:T.input,fontFamily:"inherit",boxSizing:"border-box",outline:"none"};
   const LB={fontSize:12,fontWeight:600,color:T.text2,display:"block",marginBottom:3,marginTop:8};
   const u=k=>e=>sf(p=>({...p,[k]:e.target.value}));
   const ob=(parseFloat(f.totalBoarderElec)||0)+(parseFloat(f.tapal)||0);
+
+  // Preview of boarder electric breakdown when month is selected
+  const monthBills=f.month&&bills?bills.filter(b=>b.month===f.month):[];
+  const autoTotal=monthBills.reduce((a,b)=>a+(parseFloat(b.elec)||0),0);
+
   return(
     <OL T={T} onClose={onClose}>
       <MHdr title={editRec?"Edit SOCOTECO Record":"Add SOCOTECO Record"} T={T} onClose={onClose}/>
@@ -236,9 +257,27 @@ function SocoModal({open,editRec,T,onClose,onSave}){
       </div>
       <div style={{height:1,background:T.border,margin:"12px 0"}}/>
       <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:6}}>Your boarders calculation</div>
+      {monthBills.length>0&&(
+        <div style={{background:T.bg3,borderRadius:8,padding:"8px 10px",marginBottom:8,fontSize:11}}>
+          <div style={{fontWeight:700,color:T.text2,marginBottom:4}}>Boarder electric breakdown for {f.month}:</div>
+          {monthBills.map((b,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",color:T.text3,padding:"2px 0"}}>
+              <span>Room {b.room} - {b.name}</span>
+              <span style={{fontWeight:600,color:T.blue}}>{peso(b.elec||0)}</span>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:T.green,borderTop:"1px solid "+T.border,marginTop:4,paddingTop:4}}>
+            <span>Total (auto-filled)</span>
+            <span>{peso(autoTotal)}</span>
+          </div>
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <div><label style={LB}>My Rate (per kwh)</label><input type="number" value={f.myRate} onChange={u("myRate")} placeholder="13" style={IS}/></div>
-        <div><label style={LB}>Total Boarder Electric</label><input type="number" value={f.totalBoarderElec} onChange={u("totalBoarderElec")} placeholder="3679" style={IS}/></div>
+        <div>
+          <label style={LB}>Total Boarder Electric {monthBills.length>0&&<span style={{color:T.green,fontSize:10}}>(auto-filled)</span>}</label>
+          <input type="number" value={f.totalBoarderElec} onChange={u("totalBoarderElec")} placeholder="3679" style={{...IS,color:autoTotal>0?T.green:T.text}}/>
+        </div>
         <div><label style={LB}>Tapal</label><input type="number" value={f.tapal} onChange={u("tapal")} placeholder="516" style={IS}/></div>
         <div><label style={LB}>Overall Bayad (auto)</label><input value={peso(ob)} readOnly style={{...IS,fontWeight:800,color:"#f9ff00",background:T.bg4}}/></div>
       </div>
@@ -308,6 +347,8 @@ export default function App(){
   const[tenants,setTenants]=useState(LS.get("tenants")||[]);
   const[bills,setBills]=useState(LS.get("bills")||[]);
   const[expenses,setExpenses]=useState(LS.get("expenses")||[]);
+  const[history,setHistory]=useState([]); // undo history stack
+  const[showUndo,setShowUndo]=useState(false);
   const[kwh,setKwh]=useState(LS.get("kwh")||{});
   const[transfers,setTransfers]=useState(LS.get("transfers")||{});
   const[micData,setMicData]=useState(LS.get("mic")||{});
@@ -337,9 +378,30 @@ export default function App(){
   const[dashMonth,setDashMonth]=useState(cm());
 
   const sv=(k,v,s)=>{s(v);LS.set(k,v);};
-  const setT=v=>sv("tenants",v,setTenants);
-  const setB=v=>sv("bills",v,setBills);
-  const setE=v=>sv("expenses",v,setExpenses);
+
+  // Save snapshot to undo history before any destructive change
+  function saveHistory(label){
+    const snapshot={label,tenants:[...tenants],bills:[...bills],expenses:[...expenses],soco:[...soco],ts:Date.now()};
+    setHistory(h=>[snapshot,...h].slice(0,20)); // keep last 20 actions
+    setShowUndo(true);
+    setTimeout(()=>setShowUndo(false),5000); // hide undo toast after 5s
+  }
+
+  function undoLast(){
+    if(!history.length)return;
+    const last=history[0];
+    setTenants(last.tenants);LS.set("tenants",last.tenants);
+    setBills(last.bills);LS.set("bills",last.bills);
+    setExpenses(last.expenses);LS.set("expenses",last.expenses);
+    if(last.soco){setSoco(last.soco);LS.set("soco",last.soco);}
+    setHistory(h=>h.slice(1));
+    setShowUndo(false);
+    alert("Undone: "+last.label);
+  }
+
+  const setT=v=>{sv("tenants",v,setTenants);};
+  const setB=v=>{sv("bills",v,setBills);};
+  const setE=v=>{sv("expenses",v,setExpenses);};
   const setK=v=>sv("kwh",v,setKwh);
   const setTr=v=>sv("transfers",v,setTransfers);
   const setMic=v=>sv("mic",v,setMicData);
@@ -416,6 +478,7 @@ export default function App(){
   function saveBill(f,bals,payments,total,autoStatus){
     const room=parseInt(f.room);
     if(!room){alert("Select a room");return;}
+    saveHistory("Saved bill: Room "+room);
     const t=tenants.find(x=>x.room===room);
     const bt=bals.reduce((a,b)=>a+(parseFloat(b.amt)||0),0);
     const totalPaid=payments.reduce((a,p)=>a+(parseFloat(p.amt)||0),0);
@@ -453,6 +516,7 @@ export default function App(){
   function saveTenant(f,m){
     const room=parseInt(f.room);
     if(!room||!f.name||!f.name.trim()){alert("Enter room # and name");return;}
+    saveHistory(tenantEdit?"Edited tenant: "+f.name:"Added tenant: "+f.name);
     const t={...f,room,rent:parseFloat(f.rent)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,deposit:parseFloat(f.deposit)||0};
     const nt=tenantEdit?tenants.map((x,i)=>i===tenantEdit.idx?t:x):[...tenants,t];
     nt.sort((a,b)=>a.room-b.room);
@@ -605,9 +669,21 @@ export default function App(){
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",fontSize:14}}>
 
       <TenantModal open={tenantOpen} editData={tenantEdit} T={T} onClose={()=>setTenantOpen(false)} onSave={saveTenant}/>
+
+      {/* Undo Toast */}
+      {showUndo&&history.length>0&&(
+        <div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",background:T.bg2,border:"1px solid "+T.border2,borderRadius:10,padding:"10px 16px",zIndex:99999,display:"flex",gap:10,alignItems:"center",boxShadow:"0 4px 20px rgba(0,0,0,0.4)",minWidth:280}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:T.text}}>{history[0].label}</div>
+            <div style={{fontSize:11,color:T.text3,marginTop:1}}>Tap Undo to restore</div>
+          </div>
+          <button onClick={undoLast} style={{padding:"6px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:700,background:T.amber,color:"#1c0f00"}}>Undo</button>
+          <button onClick={()=>setShowUndo(false)} style={{padding:"6px 10px",border:"1px solid "+T.border,borderRadius:7,cursor:"pointer",fontSize:13,background:T.bg3,color:T.text2}}>x</button>
+        </div>
+      )}
       <BillModal open={billOpen} initForm={billForm} initBals={billBals} initPayments={billPayments} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={dashMonth} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
       <ExpModal open={expOpen} T={T} onClose={()=>setExpOpen(false)} onSave={(e)=>{setE([...expenses,e]);setExpOpen(false);}}/>
-      <SocoModal open={socoOpen} editRec={socoEdit} T={T} onClose={()=>setSocoOpen(false)} onSave={(f)=>{const ns=socoEditIdx>=0?soco.map((x,i)=>i===socoEditIdx?f:x):[...soco,f];setSc(ns);setSocoOpen(false);}}/>
+      <SocoModal open={socoOpen} editRec={socoEdit} T={T} bills={bills} onClose={()=>setSocoOpen(false)} onSave={(f)=>{saveHistory(socoEditIdx>=0?"Edited SOCOTECO: "+f.month:"Added SOCOTECO: "+f.month);const ns=socoEditIdx>=0?soco.map((x,i)=>i===socoEditIdx?f:x):[...soco,f];setSc(ns);setSocoOpen(false);}}/>
       <PrevBillModal open={prevOpen} T={T} tenants={tenants} onClose={()=>setPrevOpen(false)} onSave={savePrevBill}/>
 
       <div style={{background:T.bg2,borderBottom:"1px solid "+T.border,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -819,7 +895,7 @@ export default function App(){
                           <button style={BSM(T.green,"#071a0e")} onClick={()=>setProfile(t)}>Profile</button>
                           <button style={BSM(T.bg3,T.text)} onClick={()=>{setTenantEdit({idx,tenant:t,mic:micData["m"+t.room]||{}});setTenantOpen(true);}}>Edit</button>
                           <button style={{padding:"4px 9px",fontSize:11,fontWeight:700,background:T.bbg,color:T.blue,border:"1px solid "+T.bbr,borderRadius:6,cursor:"pointer"}} onClick={()=>copySMS(t.room)}>SMS</button>
-                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Remove?"))return;setT(tenants.filter(x=>x.room!==t.room));}}>Remove</button>
+                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Remove?"))return;saveHistory("Removed tenant: Room "+t.room+" "+t.name);setT(tenants.filter(x=>x.room!==t.room));}}>Remove</button>
                         </div>
                       </div>
                     );
@@ -854,7 +930,7 @@ export default function App(){
                           <button style={BSM(T.bg4,T.text2)} onClick={()=>setProfile(t)}>History</button>
                           <button style={BSM(T.bg4,T.text2)} onClick={()=>{setTenantEdit({idx,tenant:t,mic:micData["m"+t.room]||{}});setTenantOpen(true);}}>Edit</button>
                           <button style={BSM(T.green,"#071a0e")} onClick={()=>{if(!confirm("Re-activate?"))return;setT(tenants.map((x,i)=>i===idx?{...x,status:"occupied",moveOutDate:""}:x));}}>Re-activate</button>
-                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Permanently delete?"))return;setT(tenants.filter(x=>x.room!==t.room));}}>Delete</button>
+                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Permanently delete?"))return;saveHistory("Deleted former tenant: "+t.name);setT(tenants.filter(x=>x.room!==t.room));}}>Delete</button>
                         </div>
                       </div>
                     );
@@ -910,7 +986,7 @@ export default function App(){
                         {b.method&&<div style={{marginTop:3}}><span style={BDG(T.bg4,T.text2)}>{b.method}</span></div>}
                         <div style={{display:"flex",gap:3,marginTop:5}}>
                           <button style={BSM(T.bg3,T.text)} onClick={()=>openBillModal(b.room,b.month)}>Edit</button>
-                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;setB(bills.filter(x=>!(x.room===b.room&&x.month===b.month)));}}>Del</button>
+                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveHistory("Deleted bill: Room "+b.room+" "+b.month);setB(bills.filter(x=>!(x.room===b.room&&x.month===b.month)));}}>Del</button>
                         </div>
                       </td>
                       <td style={TD}>
@@ -1105,7 +1181,7 @@ export default function App(){
             {[...expenses].sort((a,z)=>(z.date||"").localeCompare(a.date||"")).map((e,i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid "+T.border}}>
                 <div><div style={{fontWeight:600}}>{e.desc}</div><div style={{fontSize:12,color:T.text3,marginTop:1}}>{e.date} · {e.cat}</div></div>
-                <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:800,color:T.red}}>{peso(e.amt)}</span><button style={BSM(T.rbg,T.red)} onClick={()=>setE(expenses.filter((_,j)=>j!==i))}>Del</button></div>
+                <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:800,color:T.red}}>{peso(e.amt)}</span><button style={BSM(T.rbg,T.red)} onClick={()=>{saveHistory("Deleted expense: "+e.desc);setE(expenses.filter((_,j)=>j!==i));}}>Del</button></div>
               </div>
             ))}
             <div style={{height:1,background:T.border,margin:"14px 0"}}/>
@@ -1203,7 +1279,7 @@ export default function App(){
                       <td style={TD}>
                         <div style={{display:"flex",gap:4}}>
                           <button style={BSM(T.bg3,T.text)} onClick={()=>{setSocoEdit({...rec});setSocoEditIdx(i);setSocoOpen(true);}}>Edit</button>
-                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;setSc(soco.filter((_,j)=>j!==i));}}>Del</button>
+                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveHistory("Deleted SOCOTECO record: "+fmt(rec.month));setSc(soco.filter((_,j)=>j!==i));}}>Del</button>
                         </div>
                       </td>
                     </tr>
