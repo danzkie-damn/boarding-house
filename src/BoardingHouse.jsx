@@ -113,7 +113,8 @@ function BillModal({open,initForm,initBals,initPayments,T,tenants,kwhData,bills,
     const room=parseInt(e.target.value);
     const t=tenants.find(x=>x.room===room);
     const k=kwhData["r"+room]||{};
-    const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
+    const tenantMoveIn=t&&t.moveIn?t.moveIn.slice(0,7):null;
+    const prev=[...bills].filter(b=>b.room===room&&b.month<curMon&&b.name===(t?t.name:"")&&(!tenantMoveIn||b.month>=tenantMoveIn)).sort((a,z)=>z.month.localeCompare(a.month))[0];
     const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
     setBals(pb);
     sf(p=>({...p,room:e.target.value,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):""}));
@@ -464,7 +465,8 @@ export default function App(){
     }else if(room){
       const t=tenants.find(x=>x.room===room);
       const k=kwh["r"+room]||{};
-      const prev=[...bills].filter(b=>b.room===room&&b.month<curMon).sort((a,z)=>z.month.localeCompare(a.month))[0];
+      const tenantMoveIn=t&&t.moveIn?t.moveIn.slice(0,7):null;
+      const prev=[...bills].filter(b=>b.room===room&&b.month<curMon&&b.name===(t?t.name:"")&&(!tenantMoveIn||b.month>=tenantMoveIn)).sort((a,z)=>z.month.localeCompare(a.month))[0];
       const pb=prev&&prev.status!=="paid"&&prev.balances?prev.balances.map(bl=>({desc:"Carry: "+bl.desc,amt:bl.amt})):[];
       setBillForm({room,rent:t?String(t.rent):"",elec:k.bill?k.bill.toFixed(2):"",water:t?String(t.water):"",wifi:t?String(t.wifi):"",status:"unpaid",notes:""});
       setBillBals(pb);
@@ -485,7 +487,8 @@ export default function App(){
     const lastPay=payments.length>0?payments[payments.length-1]:null;
     // Use the bill's original month if editing, or dashMonth if creating new
     const billMonth=f.originalMonth||dashMonth;
-    const billDue=billMonth+"-25";
+    const billDue=lastDay(parseInt(billMonth.split("-")[0]),parseInt(billMonth.split("-")[1])-1);
+    // Always use CURRENT tenant name for the room
     const b={
       room,name:t?t.name:"",month:billMonth,dueDate:billDue,
       rent:parseFloat(f.rent)||0,elec:parseFloat(f.elec)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,
@@ -518,10 +521,48 @@ export default function App(){
     if(!room||!f.name||!f.name.trim()){alert("Enter room # and name");return;}
     saveHistory(tenantEdit?"Edited tenant: "+f.name:"Added tenant: "+f.name);
     const t={...f,room,rent:parseFloat(f.rent)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,deposit:parseFloat(f.deposit)||0};
+
+    // Detect room change - if editing and room number changed
+    const oldRoom=tenantEdit?tenants[tenantEdit.idx]?.room:null;
+    const roomChanged=oldRoom&&oldRoom!==room;
+
     const nt=tenantEdit?tenants.map((x,i)=>i===tenantEdit.idx?t:x):[...tenants,t];
     nt.sort((a,b)=>a.room-b.room);
     setT(nt);
-    setMic({...micData,["m"+room]:m});
+
+    // If room changed, move all their bills, KWH data, mic data to new room
+    if(roomChanged){
+      const tenantName=f.name.trim();
+
+      // Update bills - move bills belonging to this tenant from old room to new room
+      const updatedBills=bills.map(b=>{
+        if(b.room===oldRoom&&b.name===tenantName){
+          return{...b,room};
+        }
+        return b;
+      });
+      setB(updatedBills);
+
+      // Move KWH data from old room to new room
+      const oldKwh=kwh["r"+oldRoom];
+      if(oldKwh){
+        const newKwh={...kwh};
+        newKwh["r"+room]=oldKwh;
+        delete newKwh["r"+oldRoom];
+        setK(newKwh);
+      }
+
+      // Move mic data
+      const oldMic=micData["m"+oldRoom];
+      const newMic={...micData,["m"+room]:m||oldMic||{}};
+      delete newMic["m"+oldRoom];
+      setMic(newMic);
+
+      alert("Room changed from "+oldRoom+" to "+room+". All bills and KWH data moved!");
+    } else {
+      setMic({...micData,["m"+room]:m});
+    }
+
     setTenantOpen(false);
   }
 
