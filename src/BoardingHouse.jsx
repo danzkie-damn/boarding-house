@@ -522,45 +522,38 @@ export default function App(){
     saveHistory(tenantEdit?"Edited tenant: "+f.name:"Added tenant: "+f.name);
     const t={...f,room,rent:parseFloat(f.rent)||0,water:parseFloat(f.water)||0,wifi:parseFloat(f.wifi)||0,deposit:parseFloat(f.deposit)||0};
 
-    // Detect room change - if editing and room number changed
     const oldRoom=tenantEdit?tenants[tenantEdit.idx]?.room:null;
+    const oldName=tenantEdit?tenants[tenantEdit.idx]?.name?.trim():null;
     const roomChanged=oldRoom&&oldRoom!==room;
 
     const nt=tenantEdit?tenants.map((x,i)=>i===tenantEdit.idx?t:x):[...tenants,t];
     nt.sort((a,b)=>a.room-b.room);
     setT(nt);
 
-    // If room changed, move all their bills, KWH data, mic data to new room
     if(roomChanged){
-      const tenantName=f.name.trim();
-
-      // Update bills - move bills belonging to this tenant from old room to new room
+      // Match ALL bills by tenant NAME (case-insensitive) - follows the PERSON not the room
+      const moveName=(oldName||f.name).trim().toLowerCase();
       const updatedBills=bills.map(b=>{
-        if(b.room===oldRoom&&b.name===tenantName){
-          return{...b,room};
+        if(b.name&&b.name.trim().toLowerCase()===moveName){
+          return{...b,room,name:f.name.trim()};
         }
         return b;
       });
       setB(updatedBills);
+      LS.set("bills",updatedBills);
 
-      // Move KWH data from old room to new room
-      const oldKwh=kwh["r"+oldRoom];
-      if(oldKwh){
-        const newKwh={...kwh};
-        newKwh["r"+room]=oldKwh;
-        delete newKwh["r"+oldRoom];
-        setK(newKwh);
-      }
-
-      // Move mic data
-      const oldMic=micData["m"+oldRoom];
-      const newMic={...micData,["m"+room]:m||oldMic||{}};
+      // Move mic checklist with tenant
+      const oldMicVal=micData["m"+oldRoom];
+      const newMic={...micData,["m"+room]:m||oldMicVal||{}};
       delete newMic["m"+oldRoom];
       setMic(newMic);
+      LS.set("mic",newMic);
 
-      alert("Room changed from "+oldRoom+" to "+room+". All bills and KWH data moved!");
+      // KWH stays with physical room - NOT moved
+      alert("Done! "+f.name.trim()+"'s full history moved to Room "+room+". KWH stays with the room.");
     } else {
       setMic({...micData,["m"+room]:m});
+      LS.set("mic",{...micData,["m"+room]:m});
     }
 
     setTenantOpen(false);
