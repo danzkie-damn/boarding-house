@@ -531,10 +531,16 @@ export default function App(){
     setT(nt);
 
     if(roomChanged){
-      // Match ALL bills by tenant NAME (case-insensitive) - follows the PERSON not the room
+      // Move ALL bills that have EITHER the old name OR were in the old room with a matching name
+      // Use oldName to match - find all bills for this tenant
       const moveName=(oldName||f.name).trim().toLowerCase();
+      
+      // Match by name only (regardless of which room they were in)
+      // This is the key - a person can have bills from multiple rooms if they moved before
       const updatedBills=bills.map(b=>{
-        if(b.name&&b.name.trim().toLowerCase()===moveName){
+        const bName=(b.name||"").trim().toLowerCase();
+        if(bName===moveName){
+          // This bill belongs to this tenant - update room to new room
           return{...b,room,name:f.name.trim()};
         }
         return b;
@@ -550,7 +556,8 @@ export default function App(){
       LS.set("mic",newMic);
 
       // KWH stays with physical room - NOT moved
-      alert("Done! "+f.name.trim()+"'s full history moved to Room "+room+". KWH stays with the room.");
+      const movedCount=updatedBills.filter(b=>b.room===room&&(b.name||"").trim().toLowerCase()===f.name.trim().toLowerCase()).length;
+      alert("Done! "+f.name.trim()+" moved to Room "+room+". "+movedCount+" months of history transferred. KWH stays with the room.");
     } else {
       setMic({...micData,["m"+room]:m});
       LS.set("mic",{...micData,["m"+room]:m});
