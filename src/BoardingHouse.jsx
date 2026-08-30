@@ -359,6 +359,9 @@ export default function App(){
   const[invRoom,setInvRoom]=useState("");
   const[invMonth,setInvMonth]=useState(cm());
   const[finMonth,setFinMonth]=useState(cm());
+  // Reset finMonth if it's no longer in the bills list
+  const finMonthValid=[...new Set([cm(),...bills.map(b=>b.month)])];
+  const safeFinMonth=finMonthValid.includes(finMonth)?finMonth:cm();
   const[histRoom,setHistRoom]=useState("");
   const[histYear,setHistYear]=useState(String(now.getFullYear()));
   const[search,setSearch]=useState("");
@@ -421,10 +424,10 @@ export default function App(){
   const billingCur=bills.filter(b=>b.month===billingMonth).sort((a,z)=>a.room-z.room);
   const selYear=finMonth.slice(0,4);
   const yearMonths=Array.from({length:12},(_,i)=>selYear+"-"+pad(i+1));
-  const finBills=bills.filter(b=>b.month===finMonth);
+  const finBills=bills.filter(b=>b.month===safeFinMonth);
   const finExp=expenses.filter(e=>e.date&&e.date.slice(0,7)===finMonth).reduce((a,e)=>a+e.amt,0);
   const finGross=finBills.reduce((a,b)=>a+b.total,0);
-  const allYears=[...new Set([String(now.getFullYear()),...bills.map(b=>b.month.slice(0,4))])].sort((a,z)=>z-a);
+  const allYears=[...new Set([String(now.getFullYear()),...bills.map(b=>b.month.slice(0,4)),...soco.map(s=>s.month.slice(0,4))])].sort((a,z)=>z-a);
   const histFiltered=bills.filter(b=>b.month.startsWith(histYear)&&(!histRoom||b.room==histRoom)).sort((a,z)=>z.month.localeCompare(a.month));
   const histByRoom=useMemo(()=>{const m={};histFiltered.forEach(b=>{if(!m[b.room])m[b.room]=[];m[b.room].push(b);});return m;},[histFiltered]);
   const filtered=tenants.filter(t=>t.name&&t.name.toLowerCase().includes(search.toLowerCase())||String(t.room).includes(search));
@@ -496,7 +499,7 @@ export default function App(){
       payments,amtPaid:totalPaid,
       datePaid:lastPay?lastPay.date:"",
       method:lastPay?lastPay.method:"",
-      status:autoStatus,notes:f.notes
+      status:totalPaid>=total&&total>0?"paid":totalPaid>0?"balance":"unpaid",notes:f.notes
     };
     // Find by original month to avoid moving bill to wrong month
     const ei=bills.findIndex(x=>x.room===room&&x.month===billMonth);
@@ -1179,7 +1182,7 @@ export default function App(){
               <h2 style={{margin:0,fontSize:16,fontWeight:700}}>Finance</h2>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 <select value={finMonth} onChange={e=>setFinMonth(e.target.value)} style={{...IS,width:140}}>
-                  {[...new Set([curMon,...bills.map(b=>b.month)])].sort((a,z)=>z.localeCompare(a)).map(m=><option key={m} value={m}>{fmt(m)}</option>)}
+                  {allMonths.map(m=><option key={m} value={m}>{fmt(m)}{m===curMon?" (current)":""}</option>)}
                 </select>
                 <button style={BSM(T.amber,"#1c0f00")} onClick={()=>exportCSV([["BOARDING HOUSE Financial Report"],["Year: "+selYear],[],["Month","Rent","Electric","Water","Wifi","Gross","Expenses","Net"],...yearMonths.map(ym=>{const mb=bills.filter(b=>b.month===ym);const r=mb.reduce((a,b)=>a+b.rent,0),e=mb.reduce((a,b)=>a+b.elec,0),w=mb.reduce((a,b)=>a+b.water,0),wf=mb.reduce((a,b)=>a+b.wifi,0),g=mb.reduce((a,b)=>a+b.total,0),ex=expenses.filter(x=>x.date&&x.date.slice(0,7)===ym).reduce((a,x)=>a+x.amt,0);return[fmt(ym),r,e,w,wf,g,ex,g-ex];})],"Finance_"+selYear+".csv")}>Export CSV</button>
               </div>
@@ -1319,8 +1322,8 @@ export default function App(){
                       <td style={{...TD,fontSize:11,color:T.text3}}>{rec.notes||"—"}</td>
                       <td style={TD}>
                         <div style={{display:"flex",gap:4}}>
-                          <button style={BSM(T.bg3,T.text)} onClick={()=>{setSocoEdit({...rec});setSocoEditIdx(i);setSocoOpen(true);}}>Edit</button>
-                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveHistory("Deleted SOCOTECO record: "+fmt(rec.month));setSc(soco.filter((_,j)=>j!==i));}}>Del</button>
+                          <button style={BSM(T.bg3,T.text)} onClick={()=>{setSocoEdit({...rec});setSocoEditIdx(soco.findIndex(x=>x.month===rec.month));setSocoOpen(true);}}>Edit</button>
+                          <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveHistory("Deleted SOCOTECO record: "+fmt(rec.month));setSc(soco.filter(x=>x.month!==rec.month));}}>Del</button>
                         </div>
                       </td>
                     </tr>
