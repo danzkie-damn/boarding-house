@@ -727,7 +727,31 @@ export default function App(){
       )}
       <BillModal open={billOpen} initForm={billForm} initBals={billBals} initPayments={billPayments} T={T} tenants={tenants} kwhData={kwh} bills={bills} curMon={dashMonth} onClose={()=>setBillOpen(false)} onSave={saveBill}/>
       <ExpModal open={expOpen} T={T} onClose={()=>setExpOpen(false)} onSave={(e)=>{setE([...expenses,e]);setExpOpen(false);}}/>
-      <SocoModal open={socoOpen} editRec={socoEdit} T={T} bills={bills} onClose={()=>setSocoOpen(false)} onSave={(f)=>{saveHistory(socoEditIdx>=0?"Edited SOCOTECO: "+f.month:"Added SOCOTECO: "+f.month);const ns=socoEditIdx>=0?soco.map((x,i)=>i===socoEditIdx?f:x):[...soco,f];setSc(ns);setSocoOpen(false);}}/>
+      <SocoModal open={socoOpen} editRec={socoEdit} T={T} bills={bills} onClose={()=>setSocoOpen(false)} onSave={(f)=>{
+        saveHistory(socoEdit?"Edited SOCOTECO: "+f.month:"Added SOCOTECO: "+f.month);
+        // Match by original month to avoid index mismatch bugs
+        const origMonth=socoEdit?socoEdit.month:null;
+        let ns;
+        if(origMonth){
+          // Editing: replace the record that has the original month
+          const exists=soco.findIndex(x=>x.month===origMonth);
+          if(exists>=0){
+            ns=soco.map((x,i)=>i===exists?f:x);
+          } else {
+            // Not found by original month - just add
+            ns=[...soco,f];
+          }
+        } else {
+          // Adding new: check if month already exists to avoid duplicates
+          const exists=soco.findIndex(x=>x.month===f.month);
+          if(exists>=0){
+            ns=soco.map((x,i)=>i===exists?f:x);
+          } else {
+            ns=[...soco,f];
+          }
+        }
+        setSc(ns);setSocoOpen(false);setSocoEdit(null);setSocoEditIdx(-1);
+      }}/>
       <PrevBillModal open={prevOpen} T={T} tenants={tenants} onClose={()=>setPrevOpen(false)} onSave={savePrevBill}/>
 
       <div style={{background:T.bg2,borderBottom:"1px solid "+T.border,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1322,7 +1346,7 @@ export default function App(){
                       <td style={{...TD,fontSize:11,color:T.text3}}>{rec.notes||"—"}</td>
                       <td style={TD}>
                         <div style={{display:"flex",gap:4}}>
-                          <button style={BSM(T.bg3,T.text)} onClick={()=>{setSocoEdit({...rec});setSocoEditIdx(soco.findIndex(x=>x.month===rec.month));setSocoOpen(true);}}>Edit</button>
+                          <button style={BSM(T.bg3,T.text)} onClick={()=>{setSocoEdit({...rec});setSocoEditIdx(-1);setSocoOpen(true);}}>Edit</button>
                           <button style={BSM(T.rbg,T.red)} onClick={()=>{if(!confirm("Delete?"))return;saveHistory("Deleted SOCOTECO record: "+fmt(rec.month));setSc(soco.filter(x=>x.month!==rec.month));}}>Del</button>
                         </div>
                       </td>
